@@ -125,6 +125,7 @@ test('usage counts once per response id and only for the file’s own thread', (
   assert.equal(s.tokens.output, 50);
   assert.equal(s.cost.usageSkipped, 4);
   assert.equal(s.cost.incomplete, true);
+  assert.equal(s.cost.usd, null, 'skipped records make the dollar figure unknown');
   assert.equal(s.context.tokens, 1234, 'running totals are context, never summed into usage');
 });
 
@@ -250,4 +251,18 @@ test('the Codex watcher never creates the Codex folder', async () => {
   await w.start();
   w.stop();
   assert.equal(fs.existsSync(root), false);
+});
+
+test('a session whose usage records were all skipped shows unknown cost, not $0', () => {
+  const store = new CodexStore();
+  const f = '/x/r.jsonl';
+  store.ingest(meta(ids.a), f);
+  store.ingest(turnContext(), f);
+  store.ingest(user('hi'), f);
+  store.ingest(usage(ids.a, null), f);
+  store.ingest(usage(ids.b, 'r9'), f);
+  const [s] = store.snapshot();
+  assert.equal(s.apiCalls, 0);
+  assert.equal(s.tokens.output, 0, 'skipped records stay out of token counts');
+  assert.deepEqual([s.cost.usd, s.cost.source, s.cost.incomplete, s.cost.usageSkipped], [null, 'unknown', true, 2]);
 });

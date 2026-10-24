@@ -124,7 +124,7 @@ export const CODEX_MODES = [
   ['untrusted', 'untrusted · workspace-write'],
 ];
 export const codexModeLabel = m => CODEX_MODES.find(([k]) => k === m)?.[1] || m;
-export const POLICY_NOTE = 'Native Codex approval policy and sandbox. Workspace writes may run without asking; your Codex rules and managed settings still apply. A change applies from the next message.';
+export const POLICY_NOTE = 'Native Codex approval policy and sandbox. Workspace writes may run without asking; your Codex rules and managed settings still apply. A change applies from the next turn: while a turn is running, messages can’t be sent under the old policy until it ends or you stop it.';
 export const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' };
 export const providerName = p => PROVIDER_NAMES[p] || 'Claude';
 /** A session's dollar figure: unknown when some of its usage has no price. */

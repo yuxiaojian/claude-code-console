@@ -238,3 +238,20 @@ test('detail, transcript and bare-id lookups', async () => {
     assert.equal((await request(t.port, { path: '/api/sessions/codex:nope' })).status, 404);
   } finally { t.close(); }
 });
+
+test('a failed Stop or a pending policy change comes back as a 409 with a safe message', async () => {
+  const t = await setup();
+  try {
+    const run = { key: 'ef56', provider: 'codex', sessionId: ids.a, mode: 'workspace', approvals: new Map(), state: 'running' };
+    t.codexRunner.runs.set(run.key, run);
+    t.codexRunner.interrupt = async () => { throw new CodexError('interrupt', 'native detail /Users/x'); };
+    t.codexRunner.send = async () => { throw new CodexError('policyPending'); };
+    const stop = await t.post(`/api/sessions/codex:${ids.a}/interrupt`, {});
+    assert.equal(stop.status, 409);
+    assert.match(stop.json().error, /didn’t stop the turn/);
+    assert.doesNotMatch(stop.body, /Users/);
+    const send = await t.post(`/api/sessions/codex:${ids.a}/messages`, { text: 'x', permissionMode: 'read-only' });
+    assert.equal(send.status, 409);
+    assert.match(send.json().error, /applies from the next turn/);
+  } finally { t.close(); }
+});

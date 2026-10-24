@@ -424,9 +424,9 @@ export class CodexStore {
       tokens: totals,
       byModel,
       cost: {
-        // Unpriced models make the dollar figure unknown rather than a partial sum.
-        usd: unknownModels.length ? null : usd,
-        source: unknownModels.length ? 'unknown' : 'estimate',
+        // Unpriced models or skipped records make the dollar figure unknown rather than a partial sum.
+        usd: incomplete ? null : usd,
+        source: incomplete ? 'unknown' : 'estimate',
         estimated: usd,
         reported: null,
         unknownModels,

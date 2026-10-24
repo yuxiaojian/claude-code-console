@@ -11,6 +11,9 @@ export const MESSAGES = {
   exited: 'Codex stopped unexpectedly.',
   protocol: 'Codex sent a reply the console does not understand.',
   unsupported: 'Codex asked for something the console does not support.',
+  managed: 'Codex’s managed settings don’t allow the selected approval policy or sandbox. Pick another preset in the message box or the PA’s Defaults, or ask whoever manages your Codex settings.',
+  policyPending: 'The new approval policy applies from the next turn, not the one running now. Stop the current turn or wait for it to finish, then send your message again.',
+  interrupt: 'Codex didn’t stop the turn. It may still be running.',
   failed: 'Codex reported an error.',
 };
 
@@ -47,6 +50,8 @@ export function categorize(err) {
   if (info === 'unauthorized') return 'login';
   const msg = String(err?.message || '');
   if (/already has an active writer|thread-store conflict/i.test(msg)) return 'busy';
+  // Codex's wording for managed requirements (requirements.toml / MDM) rejecting a value.
+  if (/disallowed by requirements|not allowed by requirements|is not in the allowed set|requirements do not allow/i.test(msg)) return 'managed';
   if (/\b(401|unauthori[sz]ed|not logged in|login|api key|authentication)\b/i.test(msg)) return 'login';
   return 'failed';
 }

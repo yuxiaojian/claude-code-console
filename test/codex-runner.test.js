@@ -146,7 +146,7 @@ test('a mode change applies to the next turn as native overrides', async () => {
   const last = log.calls.filter(c => c[0] === 'turn/start').at(-1)[1];
   assert.equal(last.approvalPolicy, 'untrusted');
   assert.deepEqual(last.sandboxPolicy, { type: 'workspaceWrite' });
-  assert.deepEqual(run.policy, { approval: 'untrusted', sandbox: 'workspace-write' });
+  assert.deepEqual(run.policy, { approval: 'untrusted', sandbox: 'workspace-write', requested: true });
   runner.closeAll();
 });
 
@@ -330,4 +330,98 @@ test('idle runs are closed after a while', async () => {
   const runner = new CodexRunner({ spawn, available, idleMs: 20 });
   const run = await runner.start({ cwd: '/w', prompt: 'hi' });
   await until(() => run.state === 'closed');
+});
+
+test('a failed start ends the console’s child, whatever step failed', async () => {
+  const steps = ['thread/start', 'thread/fork', 'turn/start'];
+  for (const failing of [...steps, 'initialize', 'timeout']) {
+    const { spawn, log } = fakeCodex(async (method, p) => {
+      if (failing === 'timeout' && method === 'thread/start') return new Promise(() => {}); // never answers
+      if (method === failing) throw new Error('boom');
+      if (method === 'initialize') return {};
+      if (method === 'thread/start' || method === 'thread/fork') return { thread: { id: THREAD }, approvalPolicy: 'on-request', sandbox: { type: 'workspaceWrite' } };
+      if (method === 'turn/start') return { turn: { id: 't', status: 'inProgress' } };
+      throw new Error('unexpected');
+    });
+    const runner = new CodexRunner({ spawn, available, rpcTimeoutMs: 30 });
+    await assert.rejects(runner.start({ cwd: '/w', prompt: 'go', fork: failing === 'thread/fork' ? THREAD : null }));
+    assert.equal(runner.runs.size, 0, failing);
+    assert.equal(log.children[0].child.killed, true, `child ended after ${failing} failed`);
+  }
+});
+
+test('a refused or timed-out interrupt is reported, and the run carries on', async () => {
+  for (const how of ['refuse', 'timeout']) {
+    let release;
+    const handle = standard(() => new Promise(r => { release = r; }));
+    const { spawn } = fakeCodex(async (method, p, server) => {
+      if (method === 'turn/interrupt') return how === 'refuse' ? Promise.reject(new Error('no active turn /Users/x sk-proj-abcdefghijklmnop')) : new Promise(() => {});
+      return handle(method, p, server);
+    });
+    const runner = new CodexRunner({ spawn, available, rpcTimeoutMs: 40 });
+    const run = await runner.start({ cwd: '/w', prompt: 'go' });
+    await until(() => run.turnId && release);
+    const err = await runner.interrupt(run).catch(e => e);
+    assert.ok(err instanceof CodexError, how);
+    assert.equal(err.category, 'interrupt');
+    assert.doesNotMatch(err.message, /sk-proj|\/Users/);
+    assert.equal(run.state, 'running', 'the run is still there');
+    release();
+    await until(() => run.state === 'idle');
+    runner.closeAll();
+  }
+});
+
+test('a policy change during a running turn is not applied by steering: the message is refused until the next turn', async () => {
+  let release;
+  const { spawn, log } = fakeCodex(standard(() => new Promise(r => { release = r; })));
+  const runner = new CodexRunner({ spawn, available });
+  const run = await runner.start({ cwd: '/w', prompt: 'long job' });
+  await until(() => run.turnId && release);
+  await runner.setMode(run, 'read-only');
+  const err = await runner.send(run, 'now read-only please').catch(e => e);
+  assert.equal(err?.category, 'policyPending');
+  assert.ok(!log.calls.some(c => c[0] === 'turn/steer'), 'nothing went out under the old policy');
+  assert.equal(run.state, 'running');
+  release();
+  await until(() => run.state === 'idle');
+  await runner.send(run, 'now read-only please');
+  const last = log.calls.filter(c => c[0] === 'turn/start').at(-1)[1];
+  assert.equal(last.approvalPolicy, 'on-request');
+  assert.deepEqual(last.sandboxPolicy, { type: 'readOnly' });
+  assert.equal(runner.snapshot()[0].modePending, false);
+  assert.equal(runner.snapshot()[0].policy.requested, true);
+  // Without a pending change, follow-ups during a turn still steer it.
+  await until(() => run.turnId);
+  await runner.send(run, 'and this');
+  assert.equal(log.calls.at(-1)[0], 'turn/steer');
+  release();
+  runner.closeAll();
+});
+
+test('managed settings: a substituted policy is shown; a requirements error gets a fixed message; others stay generic', async () => {
+  const { spawn } = fakeCodex(async (method, p) => {
+    if (method === 'initialize') return {};
+    if (method === 'thread/start') return { thread: { id: THREAD }, approvalPolicy: 'untrusted', sandbox: { type: 'readOnly' } };
+    if (method === 'turn/start') return { turn: { id: 't', status: 'completed' } };
+    throw new Error('unexpected');
+  });
+  const runner = new CodexRunner({ spawn, available });
+  const run = await runner.start({ cwd: '/w', prompt: 'go' });
+  assert.deepEqual(run.policy, { approval: 'untrusted', sandbox: 'read-only' });
+  assert.match(runner.snapshot()[0].notice, /instead of on-request · workspace-write.*managed settings/);
+  runner.closeAll();
+
+  for (const [msg, cat] of [
+    ['`sandbox_mode` value `workspace-write` is disallowed by requirements (allowed: read-only)', 'managed'],
+    ['approval_policy `on-request` is not in the allowed set [never]', 'managed'],
+    ['401 Unauthorized', 'login'],
+    ['stream disconnected', 'failed'],
+  ]) {
+    const { spawn: sp } = fakeCodex(async method => { if (method === 'initialize') return {}; throw new Error(msg); });
+    const err = await new CodexRunner({ spawn: sp, available }).start({ cwd: '/w', prompt: 'go' }).catch(e => e);
+    assert.equal(err.category, cat, msg);
+    if (cat === 'managed') assert.match(err.message, /managed settings don’t allow/);
+    assert.doesNotMatch(err.message, /allowed: read-only|\[never\]/, 'native text is not passed on');
+  }
 });

@@ -146,6 +146,7 @@ export class CodexRunner extends EventEmitter {
       decisions: new Map(), // approval id -> native values, never sent to the browser
       items: new Map(),     // item id -> item, for file-change approvals
       error: null,
+      notice: null,         // a fixed explanation the UI shows, e.g. a policy Codex substituted
       startedAt: Date.now(),
       child: null,
       rpc: null,
@@ -171,9 +172,14 @@ export class CodexRunner extends EventEmitter {
         approval: typeof res.approvalPolicy === 'string' ? res.approvalPolicy : res.approvalPolicy ? 'granular' : run.policy.approval,
         sandbox: SANDBOX_NAMES[str(res.sandbox?.type)] || str(res.sandbox?.type) || run.policy.sandbox,
       };
+      // Managed requirements make Codex fall back to another value rather than fail: say so.
+      const want = MODES[mode];
+      if (run.policy.approval !== want.approvalPolicy || run.policy.sandbox !== want.sandbox) {
+        run.notice = `Codex is using approval ${run.policy.approval} · sandbox ${run.policy.sandbox} instead of ${want.approvalPolicy} · ${want.sandbox}, probably because its managed settings require it.`;
+      }
       await this.#turn(run, prompt);
     } catch (err) {
-      this.#finish(run);
+      this.close(run.key); // ends the child too: a failed start must not leave a process (or its writer lock) behind
       this.runs.delete(run.key);
       this.#changed();
       throw err instanceof CodexError ? err : new CodexError(categorize(err), err?.message);
@@ -193,7 +199,6 @@ export class CodexRunner extends EventEmitter {
       if (run.state === 'closed') return reject(new CodexError('exited'));
       const id = nextId++;
       const timer = setTimeout(() => { pending.delete(id); reject(new CodexError('protocol', `${method} timed out`)); }, this.rpcTimeoutMs);
-      timer.unref?.();
       pending.set(id, { resolve, reject, timer });
       write({ jsonrpc: '2.0', id, method, params });
     });
@@ -243,6 +248,9 @@ export class CodexRunner extends EventEmitter {
     const input = [{ type: 'text', text, text_elements: [] }];
     try {
       if (run.turnId) {
+        // Steering joins the running turn, which keeps its policy. Don't let a message go out
+        // under the old policy after the user changed it: they resend once the turn is over.
+        if (run.mode !== run.appliedMode) throw new CodexError('policyPending');
         await run.rpc('turn/steer', { threadId: run.sessionId, expectedTurnId: run.turnId, input });
       } else {
         const preset = MODES[run.mode];
@@ -251,13 +259,16 @@ export class CodexRunner extends EventEmitter {
         const res = await run.rpc('turn/start', { threadId: run.sessionId, input, ...overrides });
         if (run.mode !== run.appliedMode) {
           run.appliedMode = run.mode;
-          run.policy = { approval: preset.approvalPolicy, sandbox: preset.sandbox };
+          // turn/start doesn't echo the effective policy, so this is what was asked for.
+          run.policy = { approval: preset.approvalPolicy, sandbox: preset.sandbox, requested: true };
+          run.notice = null;
         }
         if (typeof res?.turn?.id === 'string' && res.turn.status === 'inProgress') run.turnId = res.turn.id;
       }
     } catch (err) {
       const cat = err instanceof CodexError ? err.category : categorize(err);
       if (cat === 'busy') this.close(run.key); // another process holds the thread: give up, don't retry
+      if (cat === 'policyPending') throw err;
       throw err instanceof CodexError ? err : new CodexError(cat, err?.message);
     }
     run.state = 'running';
@@ -398,9 +409,14 @@ export class CodexRunner extends EventEmitter {
     this.#changed();
   }
 
+  /** Ask Codex to stop the current turn. A refusal or timeout is reported; the run stays as it is. */
   async interrupt(run) {
     if (run.state === 'closed' || !run.turnId) return;
-    await run.rpc('turn/interrupt', { threadId: run.sessionId, turnId: run.turnId }).catch(() => {});
+    try {
+      await run.rpc('turn/interrupt', { threadId: run.sessionId, turnId: run.turnId });
+    } catch (err) {
+      throw new CodexError('interrupt', err?.message);
+    }
   }
 
   /** End the console's own app-server. Pending requests get no answer, so nothing is granted. */
@@ -441,6 +457,7 @@ export class CodexRunner extends EventEmitter {
       mode: r.mode,
       policy: r.policy,
       modePending: r.mode !== r.appliedMode,
+      notice: r.notice || null,
       model: r.model,
       state: r.state,
       error: r.error ? redact(r.error, 300) : null,

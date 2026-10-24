@@ -139,7 +139,8 @@ class ChatBox {
     if (starting) parts.push(h('span', { class: 'quiet' }, `Starting ${app}…`));
     else if (live) {
       parts.push(h('span', { class: 'quiet' }, run.state === 'idle' ? 'Connected · idle' : run.state === 'starting' ? `Starting ${app}…` : 'Connected · working'),
-        codex && run.policy ? h('span', { class: 'quiet', title: POLICY_NOTE }, ` · ${run.policy.approval} · ${run.policy.sandbox}${run.modePending ? ' (change applies from the next message)' : ''}`) : null,
+        codex && run.policy ? h('span', { class: 'quiet', title: POLICY_NOTE }, ` · ${run.policy.approval} · ${run.policy.sandbox}${run.policy.requested ? ' (requested)' : ''}${run.modePending ? ` · ${run.mode} from the next turn` : ''}`) : null,
+        codex && run.notice ? h('span', { class: 'err' }, ` ${run.notice}`) : null,
         h('button', { class: 'more', type: 'button', title: `End the ${app} process the console started for this session`, onclick: () => this.release(run) }, 'Disconnect'));
     }
     this.status.replaceChildren(...parts);

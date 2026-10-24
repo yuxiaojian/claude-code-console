@@ -126,6 +126,7 @@ If the [Codex CLI](https://developers.openai.com/codex) is installed, its sessio
 
 **Talking to Codex.** The console runs `codex app-server`, one process per session, through `src/codex/runner.js`. It uses your Codex login and `config.toml`. Codex 0.164.0 is the version tested; with an older or newer version that isn't tested, Codex history still shows, but chat for Codex is off.
 - **New sessions:** pick Claude Code or Codex in the New session pane.
+- **Stop:** if Codex refuses or doesn't answer a Stop, the console says the turn may still be running.
 - **Continuing:** only a Codex session the console is running right now can be continued. Every other Codex session can be **forked**: earlier sessions, ones open in a Codex terminal, and ones the console ran before it restarted. Codex keeps forks as a reference to the parent's history, so forking doesn't duplicate anything. Disconnect and Stop only ever end or interrupt the console's own Codex process.
 - **Approvals and questions:** these come from Codex itself, and each card offers exactly the choices Codex offers. A choice that saves a rule for future sessions says *saved to your Codex rules*. Questions can have secret answers, which are typed into a password field and only sent to Codex. MCP servers that ask for form input can only be declined or cancelled from the console.
 - **Policy:** each Codex session gets one of three native presets, shown as Codex's own approval policy and sandbox:
@@ -136,7 +137,11 @@ If the [Codex CLI](https://developers.openai.com/codex) is installed, its sessio
   | read only | `on-request` | `read-only` |
   | untrusted | `untrusted` | `workspace-write` |
 
-  Workspace writes may run without asking, and your Codex rules and managed settings still apply. Full access is never offered. A change made in the message box applies from the next message. Model and everything else come from your Codex configuration, unless the PA's ⚙ Defaults set a Codex model. Codex defaults are kept separately from Claude's.
+  - **What applies:** workspace writes may run without asking, and your Codex rules and managed settings still apply. Full access is never offered.
+  - **How it's sent:** every Codex session the console starts or forks sends its preset explicitly.
+  - **Changing it:** a change in the message box applies from the next turn. While a turn is running, a message can't be sent under the old policy: stop the turn or let it finish, then send it again.
+  - **Managed settings:** if they make Codex use a different policy than the one asked for, the console says so and shows what Codex is actually using. If they reject the preset outright, the console says that too.
+  - **Everything else:** model and other settings come from your Codex configuration, unless the PA's ⚙ Defaults set a Codex model. Codex defaults are kept separately from Claude's.
 
 **Open elsewhere.** Codex holds a writer lock per session in `~/.codex/thread-writer-locks/`. Lock files outlive their holders, so the console asks `lsof` which process actually holds one (`src/codex/live.js`).
 - A session another process holds is marked *open elsewhere*. The Codex TUI's background daemon keeps holding a session after its window closes.
@@ -145,7 +150,7 @@ If the [Codex CLI](https://developers.openai.com/codex) is installed, its sessio
 
 **Cost.** Codex usage is counted from the token record Codex writes for each model response.
 - **Deduplication:** a record counts once, by response id. It only counts in the file of the session it names. Records that can't be attributed are skipped, and the session says so.
-- **Unknown prices:** the console has no list prices for Codex models, so their dollar figure is *unknown* and token counts are shown instead. Totals that include unpriced or skipped usage are marked **+?**, so they never look complete when they aren't. Dollar figures are API-equivalent estimates, not what a ChatGPT plan bills.
+- **Unknown prices:** the console has no list prices for Codex models, so their dollar figure is *unknown* and token counts are shown instead. The figure is also *unknown* when any of a session's records were skipped. Totals that include unpriced or skipped usage are marked **+?**, so they never look complete when they aren't. Dollar figures are API-equivalent estimates, not what a ChatGPT plan bills.
 
 **Errors.** Codex's own error text can contain keys and paths. The browser gets fixed messages such as "not logged in" or "open in another Codex process". The one exception is a failed turn's reason (a rate limit, say), which is shown with anything that looks like a credential or a path removed.
 
