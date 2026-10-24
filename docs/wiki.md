@@ -146,3 +146,17 @@ These answers resolve the scope questions. Admin approved implementation in mess
 - eng-pm: scope, architecture decisions and serialized wiki updates; coordinate development through review to human merge approval.
 - Existing documentation PRs #1 and #2 remain unmerged. Implementation must account for their documentation dependency without merging either automatically.
 - Next gate: developer capability/design proposal and reviewer feedback. No merge, deployment or release is authorized by the implementation approval.
+
+## Implementation design review — 2026-10-24
+
+Developer design: room attachment codex-parity-design.md, message sw_6ddfa84301c74620a8150adabc2770d9. Developer reports live probes against Codex 0.164.0 for lifecycle/locking/command approvals; interruption, other approval types, subagents and compaction still require meaningful verification. These are reported findings, not independent QA results.
+
+PM decisions within approved scope:
+- Token usage with unknown Codex dollars is acceptable for this PR; no speculative price table. Incomplete totals remain explicit. Any future pricing table requires official verified sources.
+- Explicit workspace preset (on-request plus workspace-write), read-only and untrusted choices are acceptable; never label on-request as approval before every tool. Display native effective policy, respect managed constraints, preserve other native configuration, and label changes as next-turn behavior.
+- Unknown ownership may permit an explicit user resume attempt backed by Codex native writer enforcement. Check contention at both resume and turn start; never remove an external lock or kill an external holder. Only console-owned children are controllable.
+- Provider plus native session id must define identity; UUID version assumptions and dropping collisions are rejected.
+- Fork ancestry reads need bounded offsets, cycle/missing-parent handling and safe parent resolution. Copied/referenced history cannot count as new spend even outside the discovery window.
+- Small modules under src/codex are accepted as the concrete folder direction instead of the earlier tentative src/providers layout. Retain console-origin filtering across restarts. Reviewer must assess decline-only MCP elicitation and incomplete subagent/compaction evidence before design sign-off.
+
+Next gate: reviewer resolves remaining design blockers, then development proceeds under existing implementation authorization. No new human approval is required for these routine design choices. Merge/release remain separately gated.
