@@ -16,9 +16,11 @@ const isTranscript = f => f.endsWith('.jsonl');
  * Emits 'change' after new data has been read.
  */
 export class TranscriptWatcher extends EventEmitter {
-  constructor({ root, sinceMs, onLine, rescanMs = 5000 }) {
+  /** `create: false` leaves a missing root alone (another tool's folder); it's picked up once it exists. */
+  constructor({ root, sinceMs, onLine, rescanMs = 5000, create = true }) {
     super();
     this.root = root;
+    this.create = create;
     this.sinceMs = sinceMs;
     this.rescanMs = rescanMs;
     this.sizes = new Map(); // path -> last seen size
@@ -26,7 +28,7 @@ export class TranscriptWatcher extends EventEmitter {
   }
 
   async start() {
-    await fsp.mkdir(this.root, { recursive: true }).catch(() => {});
+    if (this.create) await fsp.mkdir(this.root, { recursive: true }).catch(() => {});
     const files = await this.#list();
     // Oldest-created first: a forked session copies its original's lines, and the store
     // can only tell the copy apart if it has already seen the original.

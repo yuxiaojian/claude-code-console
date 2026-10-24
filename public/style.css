@@ -357,3 +357,8 @@ select.mode-pick { font-size: 12px; color: var(--muted); padding: 4px 4px; }
 .lineage { color: var(--faint); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
 .lineage a { color: var(--working); }
 .lineage a:hover { text-decoration: underline; }
+
+/* Codex */
+.badge.provider { border-color: color-mix(in srgb, var(--text) 35%, transparent); color: var(--text); }
+.btn.persistent { border-style: dashed; }
+.defaults + .defaults { margin-top: 6px; }

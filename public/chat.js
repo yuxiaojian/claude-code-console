@@ -1,8 +1,9 @@
 // Talking to a session: approval requests, the message box, Stop and Fork.
 // One box per session (or per new-session screen) is kept alive across re-renders,
 // so a half-typed message and the cursor survive live updates.
-import { MODES, api, h, home, paHref, render, select, state } from './core.js';
+import { CODEX_MODES, MODES, POLICY_NOTE, api, h, home, paHref, providerName, render, select, state } from './core.js';
 import { markdown } from './markdown.js';
+import { codexCard } from './codex-cards.js';
 
 const boxes = new Map();
 const KEEP_BOXES = 8;
@@ -11,9 +12,9 @@ const KEEP_BOXES = 8;
 export const runFor = (sessionId, key) =>
   state.runs.filter(r => (key && r.key === key) || (sessionId && r.sessionId === sessionId)).at(-1) || null;
 
-/** `target` is { session } for an existing session or { pa } for a new one. */
+/** `target` is { session } for an existing session or { pa, provider } for a new one. */
 export function chatBox(target) {
-  const id = target.session ? `s:${target.session.id}` : `new:${target.pa.id}`;
+  const id = target.session ? `s:${target.session.id}` : `new:${target.pa.id}:${target.provider || 'claude'}`;
   let box = boxes.get(id);
   if (!box) {
     box = new ChatBox(target);
@@ -78,18 +79,32 @@ class ChatBox {
     return s ? runFor(s.id) : state.pending?.pa === this.target.pa.id ? runFor(null, state.pending.key) : null;
   }
 
+  get provider() { return this.target.session?.provider || this.target.provider || 'claude'; }
+
   update() {
     const s = this.target.session;
     const run = this.run;
     const live = run && run.state !== 'closed';
     const inTerminal = s?.openIn === 'terminal';
+    const codex = this.provider === 'codex';
+    const who = providerName(this.provider);
+    const available = state.providers[this.provider] || { chat: false };
 
     this.#renderApprovals(live ? run : null);
 
     // What the box can do right now.
     let notice = null;
-    if (!state.chat) {
-      notice = ['Chat is off because the Claude Agent SDK isn’t installed. Run ', h('code', null, 'npm install'), ' and restart the console.'];
+    if (!available.chat) {
+      notice = codex ? [available.reason || 'Chat for Codex is unavailable.']
+        : ['Chat is off because the Claude Agent SDK isn’t installed. Run ', h('code', null, 'npm install'), ' and restart the console.'];
+    } else if (codex && s && !s.canContinue && !this.forking) {
+      // Only a run the console holds can be continued; everything else forks.
+      const where = s.openIn === 'external' ? ' Another Codex process has it open.'
+        : s.openIn === 'unknown' ? ' The console couldn’t check whether another Codex process has it open.' : '';
+      notice = [
+        h('span', null, `The console isn’t running this Codex session, so it can’t continue it.${where} A fork continues from the same history in a new session.`),
+        h('button', { class: 'btn', type: 'button', onclick: () => { this.forking = true; this.update(); this.input.focus(); } }, 'Fork and continue here'),
+      ];
     } else if (inTerminal && !this.forking) {
       notice = [
         h('span', null, `This session is open in a terminal${s.terminalStatus ? ` (${s.terminalStatus})` : ''}. Sending here would mix two conversations into one transcript.`),
@@ -101,27 +116,31 @@ class ChatBox {
     this.form.hidden = Boolean(notice);
 
     const starting = state.pending && (!s || state.pending.from === s.id);
-    this.input.placeholder = !s ? `Start a new session in ${home(this.target.pa.root)}…`
+    this.input.placeholder = !s ? `Start a new ${who} session in ${home(this.target.pa.root)}…`
       : this.forking ? 'Message a fork of this session…'
-      : live ? 'Message Claude… (Enter to send, Shift+Enter for a new line)'
-      : 'Message Claude to resume this session…';
+      : live ? `Message ${who}… (Enter to send, Shift+Enter for a new line)`
+      : `Message ${who} to resume this session…`;
     this.stopBtn.hidden = !(live && ['running', 'starting'].includes(run.state));
     this.sendBtn.disabled = this.sending;
     const pa = state.projects.find(x => x.id === (s ? s.pa : this.target.pa.id));
-    const mode = this.mode || (live ? run.mode : pa?.permissionMode) || 'default';
+    const mode = this.mode || (live ? run.mode : codex ? pa?.codexMode : pa?.permissionMode) || (codex ? 'workspace' : 'default');
     if (this.modeSlot.dataset.value !== mode) {
       this.modeSlot.dataset.value = mode;
-      this.modeSlot.replaceChildren(select(MODES, mode, m => this.setMode(m), { class: 'mode-pick', title: 'Permission mode for this session' }));
+      this.modeSlot.replaceChildren(codex
+        ? select(CODEX_MODES, mode, m => this.setMode(m), { class: 'mode-pick', title: POLICY_NOTE })
+        : select(MODES, mode, m => this.setMode(m), { class: 'mode-pick', title: 'Permission mode for this session' }));
     }
     this.sendBtn.textContent = this.forking ? 'Fork & send' : 'Send';
 
+    const app = codex ? 'Codex' : 'Claude Code';
     const parts = [];
     if (this.error) parts.push(h('span', { class: 'err' }, this.error));
-    else if (run?.error) parts.push(h('span', { class: 'err' }, `Claude Code: ${run.error}`));
-    if (starting) parts.push(h('span', { class: 'quiet' }, 'Starting Claude Code…'));
+    else if (run?.error) parts.push(h('span', { class: 'err' }, codex ? run.error : `Claude Code: ${run.error}`));
+    if (starting) parts.push(h('span', { class: 'quiet' }, `Starting ${app}…`));
     else if (live) {
-      parts.push(h('span', { class: 'quiet' }, run.state === 'idle' ? 'Connected · idle' : run.state === 'starting' ? 'Starting Claude Code…' : 'Connected · working'),
-        h('button', { class: 'more', type: 'button', title: 'End the Claude Code process the console started for this session', onclick: () => this.release(run) }, 'Disconnect'));
+      parts.push(h('span', { class: 'quiet' }, run.state === 'idle' ? 'Connected · idle' : run.state === 'starting' ? `Starting ${app}…` : 'Connected · working'),
+        codex && run.policy ? h('span', { class: 'quiet', title: POLICY_NOTE }, ` · ${run.policy.approval} · ${run.policy.sandbox}${run.modePending ? ' (change applies from the next message)' : ''}`) : null,
+        h('button', { class: 'more', type: 'button', title: `End the ${app} process the console started for this session`, onclick: () => this.release(run) }, 'Disconnect'));
     }
     this.status.replaceChildren(...parts);
   }
@@ -135,7 +154,7 @@ class ChatBox {
     this.update();
     try {
       if (!s) {
-        const { key } = await api('POST', `/api/pas/${this.target.pa.id}/sessions`, { text, permissionMode: this.modeSlot.dataset.value });
+        const { key } = await api('POST', `/api/pas/${this.target.pa.id}/sessions`, { text, provider: this.provider, permissionMode: this.modeSlot.dataset.value });
         state.pending = { key, pa: this.target.pa.id };
       } else if (this.forking) {
         const { key } = await api('POST', `/api/sessions/${s.id}/fork`, { text, permissionMode: this.modeSlot.dataset.value });
@@ -175,7 +194,7 @@ class ChatBox {
     const key = run ? `${run.key}:${list.map(a => a.id).join(',')}` : '';
     if (key === this.approvalsKey) return; // keep cards (and anything typed in them) as they are
     this.approvalsKey = key;
-    this.approvals.replaceChildren(...list.map(a => approvalCard(run, a)));
+    this.approvals.replaceChildren(...list.map(a => (run.provider === 'codex' ? codexCard(run, a, decide) : approvalCard(run, a))));
   }
 }
 

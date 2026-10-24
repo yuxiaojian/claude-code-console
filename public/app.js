@@ -105,6 +105,13 @@ function showLocked() {
 function needsText(s, runs) {
   if (s.status === 'error') return s.error?.message || 'Hit an error';
   if (s.status === 'question') return 'Has a question for you';
+  if (s.status === 'approval' && s.provider === 'codex') {
+    const a = runs.find(r => r.sessionId === s.id)?.approvals[0];
+    if (a?.kind === 'command') return `Codex wants to run: ${a.command}`;
+    if (a?.kind === 'fileChange') return 'Codex wants to change files';
+    if (a?.kind === 'permissions') return 'Codex is asking for more permissions';
+    return 'Codex is waiting for you';
+  }
   if (s.status === 'approval') {
     const a = runs.find(r => r.sessionId === s.id)?.approvals[0];
     if (a?.tool === 'AskUserQuestion') return 'Has a question for you';
@@ -151,6 +158,7 @@ function connect() {
     state.totals = msg.totals;
     state.runs = msg.runs || [];
     state.chat = Boolean(msg.chat);
+    if (msg.providers) state.providers = msg.providers;
     notifyTransitions(msg.sessions, state.runs);
     render();
   };

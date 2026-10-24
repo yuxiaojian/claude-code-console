@@ -13,8 +13,8 @@ const OUTPUT_TAIL = 2_000;
 const INPUT_MAX = 2_000;     // each string field of a tool input
 const DIFF_LINES = 400;
 
-const clip = (s, n) => (s.length > n ? s.slice(0, n) + '…' : s);
-const headTail = s => (s.length > OUTPUT_HEAD + OUTPUT_TAIL + 100
+export const clip = (s, n) => (s.length > n ? s.slice(0, n) + '…' : s);
+export const headTail = s => (s.length > OUTPUT_HEAD + OUTPUT_TAIL + 100
   ? { text: `${s.slice(0, OUTPUT_HEAD)}\n…\n${s.slice(-OUTPUT_TAIL)}`, truncated: true }
   : { text: s, truncated: false });
 
@@ -175,18 +175,32 @@ export class Conversation {
   }
 }
 
-/** Reads and caches conversations by file, picking up appended bytes on each request. */
+/**
+ * Reads and caches conversations by file, picking up appended bytes on each request.
+ * `create` makes the parser for a file (Claude Code's by default). With `end`, only the
+ * first `end` bytes are read: a fixed prefix (a Codex fork's inherited history), which must
+ * lie within the file and end on a line boundary.
+ */
 export class TranscriptReader {
-  constructor() { this.cache = new Map(); }
+  constructor(create = () => new Conversation()) {
+    this.create = create;
+    this.cache = new Map();
+  }
 
-  async read(file) {
-    let c = this.cache.get(file);
+  async read(file, end = null) {
+    const key = end == null ? file : `${file}#${end}`;
+    let c = this.cache.get(key);
     const st = await fsp.stat(file);
-    if (!c || st.size < c.offset) c = new Conversation();
-    this.cache.delete(file);
-    this.cache.set(file, c);
+    if (end != null) {
+      if (!Number.isSafeInteger(end) || end < 0 || end > st.size) throw new RangeError('Offset outside the file');
+      if (end > 0 && !(await endsLine(file, end))) throw new RangeError('Offset is not at a line boundary');
+    }
+    const size = end ?? st.size;
+    if (!c || size < c.offset) c = this.create();
+    this.cache.delete(key);
+    this.cache.set(key, c);
     if (this.cache.size > CACHE_FILES) this.cache.delete(this.cache.keys().next().value);
-    if (st.size > c.offset) await this.#append(file, c, st.size);
+    if (size > c.offset) await this.#append(file, c, size);
     return c;
   }
 
@@ -211,5 +225,16 @@ export class TranscriptReader {
     } finally {
       await fh.close();
     }
+  }
+}
+
+async function endsLine(file, end) {
+  const fh = await fsp.open(file, 'r');
+  try {
+    const b = Buffer.alloc(1);
+    await fh.read(b, 0, 1, end - 1);
+    return b[0] === 0x0a;
+  } finally {
+    await fh.close();
   }
 }

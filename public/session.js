@@ -1,13 +1,16 @@
 // The session pane on the PA screen: status, activity, cost and the event log.
 import { chatBox } from './chat.js';
 import { conversation } from './conversation.js';
-import { NEEDS, ago, api, clock, h, home, now, render, sessionName, shortModel, state, statusPill, tokens, usd } from './core.js';
+import { NEEDS, POLICY_NOTE, ago, api, clock, h, home, money, now, providerName, render, sessionName, shortModel, state, statusPill, tokens, usd } from './core.js';
 
 const cacheHit = t => {
   const input = t.input + t.cacheRead + t.cacheWrite5m + t.cacheWrite1h;
   return input ? Math.round((t.cacheRead / input) * 100) + '%' : '—';
 };
-export const costTitle = c => c.source === 'estimate'
+export const costTitle = c => c.source === 'unknown' || c.incomplete
+  ? [c.unknownModels.length ? `No known price for ${c.unknownModels.join(', ')}, so the dollar figure is unknown; tokens are counted.` : `Estimated from transcript tokens at list price.`,
+    c.usageSkipped ? ` ${c.usageSkipped} usage record${c.usageSkipped === 1 ? '' : 's'} couldn't be attributed and aren't counted.` : ''].join('')
+  : c.source === 'estimate'
   ? `Estimated from transcript tokens at list price${c.unknownModels.length ? ` (unpriced: ${c.unknownModels.join(', ')})` : ''}. Claude Code's own figure appears when the session exits.`
   : c.source === 'claude-code' ? "Claude Code's reported cost"
   : `Claude Code's reported ${usd(c.reported)} + estimated spend since`;
@@ -27,6 +30,15 @@ export function where(s) {
 
 export function badges(s) {
   const mode = s.permissionMode;
+  if (s.provider === 'codex') {
+    const p = s.policy || {};
+    return [
+      h('span', { class: 'badge provider' }, 'Codex'),
+      p.approval || p.sandbox ? h('span', { class: `badge mode${p.sandbox === 'danger-full-access' || p.approval === 'never' ? ' warn' : ''}`, title: POLICY_NOTE },
+        [p.approval, p.sandbox].filter(Boolean).join(' · ')) : null,
+      s.model ? h('span', { class: 'badge', title: s.model }, s.model) : null,
+    ];
+  }
   return [
     mode === 'bypassPermissions' ? h('span', { class: 'badge warn', title: 'All permission checks skipped' }, 'bypass') : null,
     mode && mode !== 'default' && mode !== 'bypassPermissions' ? h('span', { class: 'badge mode' }, mode === 'acceptEdits' ? 'accept edits' : mode) : null,
@@ -54,7 +66,7 @@ function metrics(s) {
   const m = (k, v, extra = {}) => h('div', { class: 'metric', title: extra.title },
     h('span', { class: 'k' }, k), h('span', { class: 'v' + (extra.vclass ? ' ' + extra.vclass : '') }, v));
   return h('div', { class: 'metrics' },
-    m('Cost', usd(s.cost.usd) + (s.cost.source === 'estimate' ? '*' : ''), { title: costTitle(s.cost), vclass: 'cost' }),
+    m('Cost', money(s.cost) + (s.cost.source === 'estimate' || s.cost.incomplete ? '*' : ''), { title: costTitle(s.cost), vclass: 'cost' }),
     m('Output', tokens(s.tokens.output), { title: `${s.tokens.output.toLocaleString()} output tokens` }),
     m('Cache hit', cacheHit(s.tokens), { title: `${tokens(s.tokens.cacheRead)} cache-read input tokens` }),
     m('Turns', s.turns, { title: `${s.apiCalls} API calls${s.compactions ? `, ${s.compactions} compactions` : ''}` }),
@@ -63,6 +75,7 @@ function metrics(s) {
 }
 
 function contextBar(s) {
+  if (!s.context.window) return h('div', { class: 'ctx quiet' }, h('span', null, 'Context'), h('span', null, `${tokens(s.context.tokens)} tokens · window unknown`));
   const pct = s.context.pct;
   return h('div', { class: 'ctx', title: `${s.context.tokens.toLocaleString()} of ${s.context.window.toLocaleString()} tokens in the last request` },
     h('span', null, 'Context'),
@@ -138,19 +151,26 @@ function details(s) {
     contextBar(s),
     subagents(s),
     detail(s),
-    h('div', { class: 'where foot' }, `session ${s.id}`, s.version ? ` · v${s.version}` : '', s.entrypoint ? ` · ${s.entrypoint}` : '',
+    h('div', { class: 'where foot' }, `${providerName(s.provider)} session ${s.nativeId || s.id}`, s.version ? ` · v${s.version}` : '', s.entrypoint ? ` · ${s.entrypoint}` : '',
       s.startedAt ? ` · started ${new Date(s.startedAt).toLocaleString()}` : ''),
   );
 }
+
+const OPEN_LABELS = { console: 'in console', terminal: 'in terminal', external: 'open elsewhere', unknown: 'may be open elsewhere' };
+const OPEN_TITLES = {
+  console: 'The console is running this session',
+  terminal: 'A Claude Code process outside the console has this session open',
+  external: 'Another Codex process holds this session',
+  unknown: 'The console couldn’t check which process holds this Codex session',
+};
 
 /** What the session is doing right now, under the conversation. */
 function liveLine(s) {
   return h('div', { class: 'live-line' },
     statusPill(s),
-    s.openIn ? h('span', { class: `badge where-${s.openIn}`, title: s.openIn === 'terminal' ? 'A Claude Code process outside the console has this session open' : 'The console is running this session' },
-      s.openIn === 'terminal' ? 'in terminal' : 'in console') : null,
+    s.openIn ? h('span', { class: `badge where-${s.openIn === 'console' ? 'console' : 'terminal'}`, title: OPEN_TITLES[s.openIn] }, OPEN_LABELS[s.openIn]) : null,
     activity(s) || (NEEDS.has(s.status) && s.summary ? h('span', { class: 'quiet clip', title: s.summary }, s.summary) : null),
-    h('span', { class: 'quiet push', title: costTitle(s.cost) }, usd(s.cost.usd), ` · context ${s.context.pct.toFixed(0)}%`),
+    h('span', { class: 'quiet push', title: costTitle(s.cost) }, money(s.cost), s.context.window ? ` · context ${s.context.pct.toFixed(0)}%` : ''),
   );
 }
 
@@ -160,7 +180,7 @@ function lineage(s) {
   const parent = s.forkedFrom && state.sessions.find(x => x.id === s.forkedFrom);
   const forks = state.sessions.filter(x => x.forkedFrom === s.id);
   return [
-    s.forkedFrom ? h('span', { class: 'lineage' }, '⑂ forked from ', link(parent, s.forkedFrom.slice(0, 8))) : null,
+    s.forkedFrom ? h('span', { class: 'lineage' }, '⑂ forked from ', link(parent, s.forkedFrom.split(':').pop().slice(0, 8))) : null,
     forks.length ? h('span', { class: 'lineage' }, `⑂ ${forks.length} fork${forks.length > 1 ? 's' : ''}: `,
       forks.map((f, i) => [i ? ', ' : '', link(f)])) : null,
   ];

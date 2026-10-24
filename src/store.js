@@ -23,7 +23,7 @@ export function dayKey(ms) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const clip = (s, n = TEXT_LIMIT) => {
+export const clip = (s, n = TEXT_LIMIT) => {
   s = String(s).replace(/\s+/g, ' ').trim();
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 };
@@ -63,7 +63,7 @@ export function promptText(content) {
   return text;
 }
 
-function estimate(usageByModel) {
+export function estimate(usageByModel) {
   let usd = 0;
   const unknownModels = [];
   const totals = emptyUsage();
@@ -116,6 +116,20 @@ function newSession(id) {
     log: [],
     files: [],
   };
+}
+
+/** A session's status from its last phase and how long ago the main thread was active. Shared by providers. */
+export function phaseStatus(phase, lastMainActivity, subActive, now) {
+  const age = lastMainActivity ? now - lastMainActivity : Infinity;
+  switch (phase) {
+    case 'ended': return 'ended';
+    case 'error': return age < ERROR_FOR_MS ? 'error' : 'idle';
+    case 'question': return age < WAITING_FOR_MS ? 'question' : 'idle';
+    case 'waiting': return age < WAITING_FOR_MS ? 'waiting' : 'idle';
+    case 'working':
+    case 'tool': return age < STALE_AFTER_MS || subActive ? phase : 'stale';
+    default: return 'idle';
+  }
 }
 
 export class Store {
@@ -432,17 +446,8 @@ export class Store {
   // ---------- read side ----------
 
   statusOf(s, now = this.now()) {
-    const age = s.lastMainActivity ? now - s.lastMainActivity : Infinity;
     const subActive = [...s.subagents.values()].some(a => !a.hidden && !a.done && a.lastActivity && now - a.lastActivity < STALE_AFTER_MS);
-    switch (s.phase) {
-      case 'ended': return 'ended';
-      case 'error': return age < ERROR_FOR_MS ? 'error' : 'idle';
-      case 'question': return age < WAITING_FOR_MS ? 'question' : 'idle';
-      case 'waiting': return age < WAITING_FOR_MS ? 'waiting' : 'idle';
-      case 'working':
-      case 'tool': return age < STALE_AFTER_MS || subActive ? s.phase : 'stale';
-      default: return 'idle';
-    }
+    return phaseStatus(s.phase, s.lastMainActivity, subActive, now);
   }
 
   summarize(s, now = this.now()) {
