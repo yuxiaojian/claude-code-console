@@ -12,9 +12,9 @@ A local web console groups Claude Code sessions by project folder, shows session
 
 ### Next deliverable
 
-### Codex parity review — proposed, awaiting Admin approval
+### Codex CLI parity — approved for implementation
 
-Request: Admin asked in claude-code-console-local on 2026-10-24 to support Codex agents the same as Claude Code agents and explicitly required approval before implementation (message sw_09d95bfe930a0d1076c5de9a9bb86c6d). This authorizes requirements review only. No implementation assignment has been issued.
+Request: Admin asked in claude-code-console-local on 2026-10-24 to support Codex agents the same as Claude Code agents and explicitly required approval before implementation (message sw_09d95bfe930a0d1076c5de9a9bb86c6d). Admin subsequently approved implementation in message sw_30ba6fdf2abce704bb1a5fe81c2cecfa after confirming the four scope decisions. Merge, deployment and release remain subject to separate approval.
 
 Problem and users: People using both local coding agents need one project-oriented console to monitor sessions and interact with them.
 
@@ -136,4 +136,13 @@ Reviewer input (2026-10-24, room message sw_61327e9f629d49d781dab818c8ec9642): d
 
 Admin confirmed: Codex CLI only; external sessions are observe-only, with browser control limited to console-owned sessions and safe forks; dollar values may be API-equivalent estimates with unavailable values shown as unknown; controls use native provider policies and explain unsupported actions. Desktop/IDE and cloud sessions are outside this scope. Source: room message sw_ffe25c34cb2da4ddc8b770c72278ba23.
 
-These answers resolve the scope questions. Explicit implementation approval is still pending under Admin's original hold. Do not assign implementation until it arrives. ADR-003 remains a proposed technical design, not an accepted implementation decision.
+These answers resolve the scope questions. Admin approved implementation in message sw_30ba6fdf2abce704bb1a5fe81c2cecfa. ADR-003 is the proposed technical direction; eng-dev and eng-reviewer must verify installed-version capabilities before committing to detailed interfaces.
+
+## Delivery state — Codex CLI parity
+
+- Implementation authorized by Admin, 2026-10-24, message sw_30ba6fdf2abce704bb1a5fe81c2cecfa.
+- eng-dev: implementation and tests in a dedicated task worktree/branch; report concrete model/flow/capability design before coding and raise material scope gaps to PM.
+- eng-reviewer: early independent design/acceptance review, then exact-head PR review and QA; recheck fixes.
+- eng-pm: scope, architecture decisions and serialized wiki updates; coordinate development through review to human merge approval.
+- Existing documentation PRs #1 and #2 remain unmerged. Implementation must account for their documentation dependency without merging either automatically.
+- Next gate: developer capability/design proposal and reviewer feedback. No merge, deployment or release is authorized by the implementation approval.
