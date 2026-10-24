@@ -170,3 +170,14 @@ Review source: sw_36a07b70429c40269abeb018ef9fb74c. Supersedes PM's earlier unkn
 - Ownership races and native lock conflicts stop cleanly, without replaying turns, removing locks or controlling external processes.
 - Developer must revise the plan for reviewer sign-off before coding. Include identity, bounded nested ancestry/missing parent handling, usage deduplication/missing IDs, reversed parent/subagent discovery, provider-specific failure isolation, sanitized errors and unsupported protocol shapes.
 - This is a conservative design rule within approved external observe-only scope. Any mechanism enabling historical resume must receive design review before use.
+
+## Final developer revision and PM design sign-off — 2026-10-24
+
+Source: eng-dev confirmation sw_e095770a5cb747f898b62d48be8e33d9. PM accepts the revised design, subject to independent reviewer sign-off before coding.
+
+- Codex continuation is limited to live console-owned runs. All other sessions, including console-created history after exit/restart, are observe-only with explicit safe fork. Ineligible requests return 409 before thread/resume or turn/start; tests assert neither native call occurs.
+- Usage requires native owner matching the file's session and a response id. Missing/mismatched owners or missing response ids are skipped and reported as incomplete at session and total levels. Per-session response-id sets do not evict entries during retention; pruning a session releases its dedupe state. Reverse discovery and replay must not affect accounting.
+- Browser errors use fixed safe categories. Any optional native detail passes tested secret/path redaction before clipping; position-zero secrets must be covered.
+- Display effective native policies and explain workspace writes may run without asking, with native rules and managed settings still applying.
+- Developer corrected the initial TUI probe: a resumed TUI acquired its daemon writer lock without typing, observed at about 0.9 seconds. The earlier first-write claim was incorrect due to slow daemon installation. This reported correction does not alter conservative ownership rules; independent runtime QA remains pending.
+- Next state: await independent reviewer confirmation, then implementation and exact-head review/QA. Merge/release remain gated by Admin approval.
