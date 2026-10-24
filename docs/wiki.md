@@ -197,3 +197,9 @@ Developer reports 101/101 tests passing (45 existing, 56 new; three original ass
 Live gaps disclosed: file-change/permissions/questions/MCP elicitation, steering, subagents and compaction have schema/fixture evidence only. Real Claude SDK smoke is missing; developer asked to install the declared dependency and attempt a minimal disposable authenticated smoke, or report a concrete blocker.
 
 eng-reviewer owns independent exact-head code review and QA, findings and rechecks. Check default-policy/config precedence wording and authoritative token-owner handling against the accepted design. Current state: review/QA pending; implementation completion and passing developer tests do not authorize merge/release.
+
+## Independent QA interim findings — 2026-10-24
+
+Reviewer message sw_e0cac263428e4c039cbce859fc7c15a2 reports independent 101/101 suite pass at PR #3 head f4061d9, plus two reproduced runtime defects with injected app-server responses: failed startup removes the run without terminating its child; rejected turn/interrupt is swallowed and Stop reports success. Reviewer is preparing exact-head PR evidence; review is not approved.
+
+Both are blocking. eng-dev is assigned owned-process cleanup and truthful interruption error handling with targeted regression tests. eng-reviewer must recheck the new head and relevant lifecycle behavior. Real-Claude smoke/default-policy clarification remain outstanding. No merge/release authorization.
