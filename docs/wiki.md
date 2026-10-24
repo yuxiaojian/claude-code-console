@@ -107,12 +107,13 @@ Involve eng-reviewer when defining testable acceptance criteria and substantial 
 ### ADR-003: Provider adapters and native Codex runtime
 
 - Date: 2026-10-24
-- Status: Proposed; implementation awaits Admin approval.
+- Status: Accepted for implementation with the revisions in “Independent design gate cleared” and “Final developer revision and PM design sign-off” below. Historical original status: Proposed; implementation awaited Admin approval.
 - Context: Claude assumptions currently span discovery, state, execution, settings and UI; Codex uses distinct records and policy concepts.
 - Options: Duplicate the console; force Codex through Claude event/policy shapes; share the console with small provider-specific adapters.
-- Proposed decision: Share UI/project infrastructure, namespace session identities, and preserve native capabilities/policies. Prefer Codex app-server for interactive execution, subject to installed-version verification.
+- Original proposed decision (retained for history): Share UI/project infrastructure, namespace session identities, and preserve native capabilities/policies. Prefer Codex app-server for interactive execution, subject to installed-version verification.
+- Accepted decision: Use small src/codex adapters and native app-server, provider-qualified identities, bounded ancestry, live-owned continuation only and explicit incomplete usage, as detailed in the final design records below.
 - Consequences: Some controls and usage fields differ by provider; missing evidence must remain unknown. Adapter boundaries should follow actual needs, avoiding a general plugin framework.
-- Approval source: None yet; request sw_09d95bfe930a0d1076c5de9a9bb86c6d requires prior implementation approval.
+- Approval source: Admin implementation approval sw_30ba6fdf2abce704bb1a5fe81c2cecfa; PM design sign-off sw_56862500a3e840c29b9c0ef0005501ed; independent design sign-off sw_e7d2c0060de64c50a74c4140546ea05a. Historical original approval field: None yet; initial request sw_09d95bfe930a0d1076c5de9a9bb86c6d required prior approval.
 
 ### ADR template
 
@@ -126,6 +127,8 @@ Number and title; date; proposed/accepted/superseded status; context; options; d
 
 ## Verification record
 
+The dated entries below preserve the sequence of proposals, approvals and verification. Earlier pending gates and unverified claims describe their state at the time; the latest clearance record governs current delivery status.
+
 Initial wiki is documentation only. Repository behavior and architecture have not been independently tested as part of team provisioning. Each subsequent PR must record its own relevant verification.
 
 - 2026-10-24: Codex parity requirements review prepared; questions and proposed criteria await Admin response. No implementation approved. GitHub identity yuxiaojian and ADMIN access verified; PR #1 remains open at 7738e3c. This scope branch builds on that unmerged documentation branch.
@@ -138,7 +141,9 @@ Admin confirmed: Codex CLI only; external sessions are observe-only, with browse
 
 These answers resolve the scope questions. Admin approved implementation in message sw_30ba6fdf2abce704bb1a5fe81c2cecfa. ADR-003 is the proposed technical direction; eng-dev and eng-reviewer must verify installed-version capabilities before committing to detailed interfaces.
 
-## Delivery state — Codex CLI parity
+## Historical delivery state at implementation authorization — Codex CLI parity
+
+This snapshot is superseded by “Independent review/QA cleared; human merge gate” below. Its next gate is historical, not the current task state.
 
 - Implementation authorized by Admin, 2026-10-24, message sw_30ba6fdf2abce704bb1a5fe81c2cecfa.
 - eng-dev: implementation and tests in a dedicated task worktree/branch; report concrete model/flow/capability design before coding and raise material scope gaps to PM.
