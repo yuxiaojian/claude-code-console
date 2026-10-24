@@ -12,13 +12,53 @@ A local web console groups Claude Code sessions by project folder, shows session
 
 ### Next deliverable
 
-Not yet assigned. Before implementation, record the problem, intended users, scope, non-goals, acceptance criteria and verification plan here. Do not infer a feature backlog from team setup approval.
+### Codex parity review — proposed, awaiting Admin approval
+
+Request: Admin asked in claude-code-console-local on 2026-10-24 to support Codex agents the same as Claude Code agents and explicitly required approval before implementation (message sw_09d95bfe930a0d1076c5de9a9bb86c6d). This authorizes requirements review only. No implementation assignment has been issued.
+
+Problem and users: People using both local coding agents need one project-oriented console to monitor sessions and interact with them.
+
+Proposed scope:
+- Discover Codex local session history alongside Claude sessions, respecting the existing recent-history window and configured provider directories.
+- Group both providers under the same existing PA/project rules; label the provider on sessions and choose a provider when starting a session.
+- Show conversation history, activity/tools, attention status, subagent relationships, token/context usage and notifications where the source supplies evidence.
+- Start, resume, fork, send follow-ups, interrupt and disconnect Codex sessions from the browser; handle native approvals and questions.
+- Keep model and permission defaults separate per provider while preserving current Claude settings and behavior.
+- Use existing local Codex authentication/configuration. Do not add account/token management as part of parity.
+
+Questions for Admin:
+1. Is the initial target local Codex CLI sessions, or must locally stored desktop/IDE sessions also be included? Remote/cloud sessions would need separate scope.
+2. May Codex dollar values be explicitly labelled list-price estimates when available, with unknown/unavailable values shown honestly rather than treated as actual subscription billing?
+3. May provider-native controls differ where Codex has no exact Claude equivalent, with unavailable actions explained in the UI?
+
+Proposed acceptance criteria:
+1. Both providers appear in a shared project without session-id collisions; Claude-only installations and existing saved defaults continue to work.
+2. Historical and new Codex conversations render incrementally without duplicate messages or fork/subagent usage; partial or unsupported records do not break other sessions.
+3. Console-owned Codex sessions support the lifecycle actions above. Active external sessions are not written to concurrently; unknown ownership is represented conservatively.
+4. Approval/question cards reflect native requests and scopes. Denials, interruption, stale responses and disconnects cannot accidentally grant permissions or replay a turn.
+5. Provider-specific models and policy controls are validated against the supported installed version. Missing Codex/login and unsupported capabilities have actionable errors.
+6. Costs distinguish estimates, reported amounts and unknown values; incomplete totals cannot silently imply full coverage.
+7. Existing access-token, origin/host checks and safe transcript rendering remain effective for Codex routes.
+
+Verification proposal: fixture-based ingestion and lifecycle/approval protocol tests, existing Claude regression tests, and independent reviewer verification at an exact PR head. A live local smoke test will require a working Codex login; no agent task was run during this review.
+
+Non-goals proposed for this request: remote/cloud orchestration, cross-provider conversation conversion and a package/repository rename. These are scope suggestions, not accepted exclusions.
 
 ## Architecture and design
 
 Existing README describes transcript watching/tailing, an in-memory session store, HTTP/SSE delivery, a browser UI and an Agent SDK runner. Verify against current source before relying on details.
 
 For each change, document affected data models, system flows, interfaces, edge cases and failure behavior before writing code. Identify migration or compatibility needs where relevant. Record important choices as ADRs below.
+
+### Proposed provider integration
+
+Current source baseline e2503cb is Claude-specific across CLI wiring, watcher/store/transcript, live-process detection, runner, API and browser settings. Share project grouping, tailing, HTTP/SSE transport and rendering where appropriate; isolate provider event parsing and execution behind small adapters. Session identity must include provider plus native session id. Keep capability and availability data explicit rather than a single global chat flag.
+
+Candidate Codex runtime: local app-server, whose documented protocol supports thread start/resume/fork, streamed events, interruption, approvals and user input. Validate against installed Codex 0.164.0 before accepting a minimum version. Local transcript discovery, external-process ownership, subagent relationships and usage semantics still need design verification; protocol documentation does not establish complete parity for arbitrary external sessions.
+
+Naming/folders proposed: use existing camelCase fields and kebab-case provider ids (`claude`, `codex`); provider modules under `src/providers/` only where needed; retain shared HTTP/SSE and project helpers in their current modules. Browser code stays in `public/`; tests in `test/`. Provider errors should carry provider, operation and a safe actionable message through existing JSON/SSE error handling, without credentials or raw auth configuration. These conventions remain proposed until design approval.
+
+Official source: https://developers.openai.com/codex/app-server (reviewed 2026-10-24). This is a requirements review, not a validated integration.
 
 ## Engineering conventions
 
@@ -64,6 +104,16 @@ Involve eng-reviewer when defining testable acceptance criteria and substantial 
 - Decision: eng-pm combines PM and architecture; eng-dev is the sole Claude Code developer; eng-reviewer combines independent code review and QA. Stop the three redundant agents and preserve their history.
 - Consequences: Fewer handoffs; review and QA remain independent of implementation. Reviewer participates early in acceptance criteria/design and verifies exact PR commits.
 
+### ADR-003: Provider adapters and native Codex runtime
+
+- Date: 2026-10-24
+- Status: Proposed; implementation awaits Admin approval.
+- Context: Claude assumptions currently span discovery, state, execution, settings and UI; Codex uses distinct records and policy concepts.
+- Options: Duplicate the console; force Codex through Claude event/policy shapes; share the console with small provider-specific adapters.
+- Proposed decision: Share UI/project infrastructure, namespace session identities, and preserve native capabilities/policies. Prefer Codex app-server for interactive execution, subject to installed-version verification.
+- Consequences: Some controls and usage fields differ by provider; missing evidence must remain unknown. Adapter boundaries should follow actual needs, avoiding a general plugin framework.
+- Approval source: None yet; request sw_09d95bfe930a0d1076c5de9a9bb86c6d requires prior implementation approval.
+
 ### ADR template
 
 Number and title; date; proposed/accepted/superseded status; context; options; decision; consequences; evidence and approval source. A superseding ADR links back to the earlier record.
@@ -77,3 +127,5 @@ Number and title; date; proposed/accepted/superseded status; context; options; d
 ## Verification record
 
 Initial wiki is documentation only. Repository behavior and architecture have not been independently tested as part of team provisioning. Each subsequent PR must record its own relevant verification.
+
+- 2026-10-24: Codex parity requirements review prepared; questions and proposed criteria await Admin response. No implementation approved. PR #1 current remote status could not be verified because GitHub access failed during review; its wiki branch was read locally.
