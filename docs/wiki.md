@@ -187,3 +187,13 @@ Source: eng-dev confirmation sw_e095770a5cb747f898b62d48be8e33d9. PM accepts the
 eng-reviewer granted design sign-off in sw_e7d2c0060de64c50a74c4140546ea05a. Implementation may proceed under Admin's existing approval. The accepted design comprises the original proposal plus subsequent identity/ancestry/restart and final ownership/usage/error/policy corrections; superseded proposals above remain historical only. ADR-003 is accepted for this implementation with those corrections and src/codex folder layout.
 
 Verify native token owner fields against captured Codex 0.164.0 records. Missing owner evidence or conflicting thread_id/session_id values must be skipped and flagged incomplete. Prefer fixed safe error messages. Code review and independent QA remain pending the exact implementation PR head; no merge/release approved.
+
+## Development handoff to independent review — 2026-10-24
+
+Implementation PR #3 is open at f4061d988efd9ad5936ab389026ee1c53715f3e9, based on main e2503cb; verified via GitHub. Developer handoff: sw_41b3d4d878d44d2ea766d6d80c46c8ff. PRs #1/#2 remain separate documentation dependencies.
+
+Developer reports 101/101 tests passing (45 existing, 56 new; three original assertions updated), real Codex 0.164.0 smoke for approval cancellation/duplicate response, interrupt, disconnected-session rejection, fork history and unknown/incomplete costs. Screenshots and smoke log were posted to the room; PM has not independently verified their runtime assertions.
+
+Live gaps disclosed: file-change/permissions/questions/MCP elicitation, steering, subagents and compaction have schema/fixture evidence only. Real Claude SDK smoke is missing; developer asked to install the declared dependency and attempt a minimal disposable authenticated smoke, or report a concrete blocker.
+
+eng-reviewer owns independent exact-head code review and QA, findings and rechecks. Check default-policy/config precedence wording and authoritative token-owner handling against the accepted design. Current state: review/QA pending; implementation completion and passing developer tests do not authorize merge/release.
