@@ -221,3 +221,11 @@ Developer clarified every Codex start/fork sends an explicit preset; changed mod
 Developer message sw_9531e6d88f6f46ea93c7eff2a22ecf61 submits PR #3 head 61abcc2dee340c1ff7f5bebd9445ecd94e0e8162 with reported 107/107 tests. Claimed fixes: child cleanup on all startup phases/timeouts, truthful interrupt failure with active state preserved, refusal to steer while a policy change is pending, unknown dollar cost for skipped usage, effective-policy fallback notices and categorized managed-policy rejection. An additional RPC-timeout timer issue is fixed. All claims await independent recheck.
 
 eng-reviewer is asked to verify original repros plus late RPC replies/timeouts and policy rejection before steering, and assess live-smoke reruns warranted by the changes. Managed requirements behavior is fake-tested only; developer could not exercise it without admin configuration, and no machine/admin setup changes are authorized. Original live-smoke evidence is at f4061d9, not the new head. Current gate remains independent review/QA; no merge/release approval.
+
+## Independent review/QA cleared; human merge gate — 2026-10-24
+
+Reviewer message sw_3f3b93a820b94924a0f6eba0426cbcf7 clears PR #3 at 61abcc2dee340c1ff7f5bebd9445ecd94e0e8162. Evidence: https://github.com/yuxiaojian/claude-code-console/pull/3#issuecomment-6390351785. All four findings resolved; no remaining blockers identified. Independent 107/107 suite, original failure probes and diff check pass. Synthetic Chrome checks pass provider-id collisions, observe-only UI, explicit fork, unknown-cost rendering and API rejection before runner calls, without page errors.
+
+Residual limitations: managed-policy messages/notices have review/fixture coverage, not live managed-requirements verification. Other previously disclosed native capabilities remain schema/fixture-only. Native Codex and Claude smoke logs remain developer-run evidence at the earlier head. No independent native live smoke is claimed.
+
+Development and independent review/QA gates are complete for this exact implementation head. Await Admin's explicit merge approval; no merge, deployment or release performed. Documentation PR #2 includes this record and depends on still-open #1; final documentation review is requested separately.
