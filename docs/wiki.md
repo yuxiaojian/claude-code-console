@@ -203,3 +203,9 @@ eng-reviewer owns independent exact-head code review and QA, findings and rechec
 Reviewer message sw_e0cac263428e4c039cbce859fc7c15a2 reports independent 101/101 suite pass at PR #3 head f4061d9, plus two reproduced runtime defects with injected app-server responses: failed startup removes the run without terminating its child; rejected turn/interrupt is swallowed and Stop reports success. Reviewer is preparing exact-head PR evidence; review is not approved.
 
 Both are blocking. eng-dev is assigned owned-process cleanup and truthful interruption error handling with targeted regression tests. eng-reviewer must recheck the new head and relevant lifecycle behavior. Real-Claude smoke/default-policy clarification remain outstanding. No merge/release authorization.
+
+## PR #3 changes required — 2026-10-24
+
+Independent review at f4061d9: https://github.com/yuxiaojian/claude-code-console/pull/3#issuecomment-6390271014 (room sw_d0cc614bc2e940029ccc19e20befe87e). Four reproduced blockers: P1 startup orphan child; P2 swallowed interrupt failure; P2 next-message policy promise while steering under old policy; P2 all-skipped usage shown as zero in rows/live line. eng-dev must fix and add focused regression tests; eng-reviewer rechecks exact updated head.
+
+Policy timing must either defer steering until the new turn/policy or explicitly describe next-new-turn semantics and show effective current policy. Unknown/incomplete usage must remain consistent across all views. Reviewer independently ran 101 tests and read the supplied smoke log; native paid/browser smoke and real-Claude chat were not independently rerun. No merge/release approval.
