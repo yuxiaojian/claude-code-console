@@ -226,6 +226,8 @@ eng-reviewer is asked to verify original repros plus late RPC replies/timeouts a
 
 Reviewer message sw_3f3b93a820b94924a0f6eba0426cbcf7 clears PR #3 at 61abcc2dee340c1ff7f5bebd9445ecd94e0e8162. Evidence: https://github.com/yuxiaojian/claude-code-console/pull/3#issuecomment-6390351785. All four findings resolved; no remaining blockers identified. Independent 107/107 suite, original failure probes and diff check pass. Synthetic Chrome checks pass provider-id collisions, observe-only UI, explicit fork, unknown-cost rendering and API rejection before runner calls, without page errors.
 
-Residual limitations: managed-policy messages/notices have review/fixture coverage, not live managed-requirements verification. Other previously disclosed native capabilities remain schema/fixture-only. Native Codex and Claude smoke logs remain developer-run evidence at the earlier head. No independent native live smoke is claimed.
+Residual limitations: managed-policy messages/notices have review/fixture coverage, not live managed-requirements verification. Other previously disclosed native capabilities remain schema/fixture-only. Developer also reran the live Codex smoke at 61abcc2 (room sw_ebf10d5ca83f4bbfa2c0f70bc2db2630); Claude smoke remains at f4061d9. No independent native live smoke is claimed.
 
 Development and independent review/QA gates are complete for this exact implementation head. Await Admin's explicit merge approval; no merge, deployment or release performed. Documentation PR #2 includes this record and depends on still-open #1; final documentation review is requested separately.
+
+PM accepts explicit refusal, preserved draft text and retry guidance when a policy change is pending during an active turn; automatic deferred sending is unnecessary. This avoids sending under the old policy and is covered by independent recheck (developer clarification sw_ba36164b2df141a2a10bd5d03c6c2407).
