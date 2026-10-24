@@ -26,7 +26,7 @@ Proposed scope:
 - Keep model and permission defaults separate per provider while preserving current Claude settings and behavior.
 - Use existing local Codex authentication/configuration. Do not add account/token management as part of parity.
 
-Questions for Admin:
+Scope questions answered by Admin on 2026-10-24 (message sw_ffe25c34cb2da4ddc8b770c72278ba23). Original questions retained for traceability:
 1. Is the initial target local Codex CLI sessions, or must locally stored desktop/IDE sessions also be included? Remote/cloud sessions would need separate scope.
 2. May Codex dollar values be explicitly labelled list-price estimates when available, with unknown/unavailable values shown honestly rather than treated as actual subscription billing?
 3. May provider-native controls differ where Codex has no exact Claude equivalent, with unavailable actions explained in the UI?
@@ -131,3 +131,9 @@ Initial wiki is documentation only. Repository behavior and architecture have no
 - 2026-10-24: Codex parity requirements review prepared; questions and proposed criteria await Admin response. No implementation approved. GitHub identity yuxiaojian and ADMIN access verified; PR #1 remains open at 7738e3c. This scope branch builds on that unmerged documentation branch.
 
 Reviewer input (2026-10-24, room message sw_61327e9f629d49d781dab818c8ec9642): define external ownership conservatively; only control console-owned processes. Explicitly verify native configuration precedence, provider/version capabilities, archive discovery, restart/replay, compaction and browser reconnect. Never silently translate Claude modes or persistent approval scopes into Codex policies. Runtime compatibility remains unverified.
+
+## Confirmed Codex scope decisions — 2026-10-24
+
+Admin confirmed: Codex CLI only; external sessions are observe-only, with browser control limited to console-owned sessions and safe forks; dollar values may be API-equivalent estimates with unavailable values shown as unknown; controls use native provider policies and explain unsupported actions. Desktop/IDE and cloud sessions are outside this scope. Source: room message sw_ffe25c34cb2da4ddc8b770c72278ba23.
+
+These answers resolve the scope questions. Explicit implementation approval is still pending under Admin's original hold. Do not assign implementation until it arrives. ADR-003 remains a proposed technical design, not an accepted implementation decision.
