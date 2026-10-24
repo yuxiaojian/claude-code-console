@@ -209,3 +209,9 @@ Both are blocking. eng-dev is assigned owned-process cleanup and truthful interr
 Independent review at f4061d9: https://github.com/yuxiaojian/claude-code-console/pull/3#issuecomment-6390271014 (room sw_d0cc614bc2e940029ccc19e20befe87e). Four reproduced blockers: P1 startup orphan child; P2 swallowed interrupt failure; P2 next-message policy promise while steering under old policy; P2 all-skipped usage shown as zero in rows/live line. eng-dev must fix and add focused regression tests; eng-reviewer rechecks exact updated head.
 
 Policy timing must either defer steering until the new turn/policy or explicitly describe next-new-turn semantics and show effective current policy. Unknown/incomplete usage must remain consistent across all views. Reviewer independently ran 101 tests and read the supplied smoke log; native paid/browser smoke and real-Claude chat were not independently rerun. No merge/release approval.
+
+## Claude smoke and policy clarification — 2026-10-24
+
+Developer message sw_b22d16f7458e402ea1634a086810811a reports successful real-Claude SDK smoke at unchanged PR #3 head f4061d9 after npm ci: approval denied/no file, duplicate answer 404, same-process follow-up, disconnect/resume, bare-id compatibility, three-turn transcript and reported Claude cost. This closes the missing developer smoke evidence; reviewer has not independently rerun it. A transient post-disconnect 409 while the process exits is reported as existing main behavior, not verified as a new regression.
+
+Developer clarified every Codex start/fork sends an explicit preset; changed modes apply on next turn/start, unchanged turns preserve native configuration. Safe actionable errors for recognized managed-policy incompatibility are required in PR #3, not deferred; unknown causes remain generic rather than falsely classified. The four independent review blockers remain open pending corrected exact head/recheck.
