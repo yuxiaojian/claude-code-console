@@ -154,9 +154,19 @@ Developer design: room attachment codex-parity-design.md, message sw_6ddfa84301c
 PM decisions within approved scope:
 - Token usage with unknown Codex dollars is acceptable for this PR; no speculative price table. Incomplete totals remain explicit. Any future pricing table requires official verified sources.
 - Explicit workspace preset (on-request plus workspace-write), read-only and untrusted choices are acceptable; never label on-request as approval before every tool. Display native effective policy, respect managed constraints, preserve other native configuration, and label changes as next-turn behavior.
-- Unknown ownership may permit an explicit user resume attempt backed by Codex native writer enforcement. Check contention at both resume and turn start; never remove an external lock or kill an external holder. Only console-owned children are controllable.
+- Superseded ownership proposal: allow an explicit resume attempt under unknown ownership relying on native writer enforcement. Rejected after independent design review; the stricter rule below governs.
 - Provider plus native session id must define identity; UUID version assumptions and dropping collisions are rejected.
 - Fork ancestry reads need bounded offsets, cycle/missing-parent handling and safe parent resolution. Copied/referenced history cannot count as new spend even outside the discovery window.
 - Small modules under src/codex are accepted as the concrete folder direction instead of the earlier tentative src/providers layout. Retain console-origin filtering across restarts. Reviewer must assess decline-only MCP elicitation and incomplete subagent/compaction evidence before design sign-off.
 
 Next gate: reviewer resolves remaining design blockers, then development proceeds under existing implementation authorization. No new human approval is required for these routine design choices. Merge/release remain separately gated.
+
+## Ownership correction after independent review — 2026-10-24
+
+Review source: sw_36a07b70429c40269abeb018ef9fb74c. Supersedes PM's earlier unknown-ownership resume allowance in sw_080749d9e4704500a4bdc02b2be425a0. A writer lock protects integrity but does not prove permission to take control.
+
+- Full control requires a live console-owned run. Historical/non-owned resume requires affirmative exclusive console ownership; no-lock, failed/missing lsof, elapsed time or console origin alone is insufficient.
+- Without a demonstrated reliable ownership mechanism, historical threads (including console-created threads after child exit/restart) are observe-only with an explicit safe-fork action. Never silently substitute fork for resume; explain unavailable resume.
+- Ownership races and native lock conflicts stop cleanly, without replaying turns, removing locks or controlling external processes.
+- Developer must revise the plan for reviewer sign-off before coding. Include identity, bounded nested ancestry/missing parent handling, usage deduplication/missing IDs, reversed parent/subagent discovery, provider-specific failure isolation, sanitized errors and unsupported protocol shapes.
+- This is a conservative design rule within approved external observe-only scope. Any mechanism enabling historical resume must receive design review before use.
