@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code Console</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23d97757'/></svg>">
+  <script>
+    // Set the theme before first paint to avoid a flash. Saved choice wins; otherwise follow the OS.
+    document.documentElement.dataset.theme = localStorage.getItem('ccc.theme')
+      || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  </script>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <button id="sideToggle" class="btn icon" type="button" aria-label="Toggle sidebar">≡</button>
+    <a class="brand" href="#/"><span class="conn" id="conn" title="Connecting…"></span>Claude Code Console</a>
+    <div class="controls">
+      <input id="filter" type="search" placeholder="Filter…" autocomplete="off">
+      <button id="theme" class="btn icon" type="button"></button>
+      <button id="notify" class="btn" type="button" title="Notify when a session needs you">🔔 Notify</button>
+    </div>
+  </header>
+  <div class="shell">
+    <nav id="side" class="side"></nav>
+    <main id="main"><p class="empty">Connecting…</p></main>
+  </div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
