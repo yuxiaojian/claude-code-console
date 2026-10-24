@@ -34,13 +34,15 @@ For each change, document affected data models, system flows, interfaces, edge c
 
 ## Team and workflow
 
-- eng-pm (Codex): requirements, acceptance criteria, coordination and wiki edit ownership.
-- eng-architect (Codex): design, architecture and ADRs.
-- eng-dev-1 and eng-dev-2 (Claude Code): implementation, tests and PRs.
-- eng-reviewer (Codex): independent PR findings and follow-up review.
-- eng-qa (Codex): acceptance verification and reproducible defect evidence.
+- eng-pm (Codex): combined PM and architect; requirements, acceptance criteria, design, architecture, ADRs, coordination and wiki edit ownership.
+- eng-dev (Claude Code): sole developer; implementation, tests and PRs. Renamed from eng-dev-1.
+- eng-reviewer (Codex): combined independent code reviewer and QA; early acceptance/design feedback, PR findings, acceptance verification and reproducible defect evidence.
 
-Discuss project work in the eng-claude-code-console room; cross-project intake and progress belong in eng-team. Route requirements through design, implementation, PR review and QA, then request human merge approval. Record lasting decisions here rather than leaving them only in chat. Approve additional project/task rooms before creation.
+The former eng-architect, eng-dev-2 and eng-qa agents are stopped with history preserved. Do not assign them new tasks.
+
+Discuss project work in claude-code-console-local; cross-project intake and progress belong in engineering-local. Both are private built-in Mattermost rooms accessible inside Switch Console. Earlier Slack and agent-only rooms retain history but are superseded for new discussions.
+
+Involve eng-reviewer when defining testable acceptance criteria and substantial designs, then independently review and test the exact implementation PR head. Route fixes back to eng-dev and recheck relevant changes. Human approval is required to merge or release. Record lasting decisions here. Approve additional project/task rooms before creation.
 
 ## Architecture decision records
 
@@ -53,6 +55,15 @@ Discuss project work in the eng-claude-code-console room; cross-project intake a
 - Decision: Maintain docs/wiki.md with current PRD, architecture, conventions, numbered ADRs and dated history. Commit and push updates on Admin-owned repos; use PRs for review.
 - Consequences: Decisions travel with the code and can be reviewed. PM must coordinate concurrent edits. Superseded decisions remain traceable.
 
+### ADR-002: Consolidate into three agents
+
+- Date: 2026-10-24
+- Status: Accepted by Admin; supersedes the original six-agent staffing arrangement.
+- Context: Admin requested fewer agents with combined responsibilities.
+- Options: Keep six specialists; combine adjacent responsibilities into three agents.
+- Decision: eng-pm combines PM and architecture; eng-dev is the sole Claude Code developer; eng-reviewer combines independent code review and QA. Stop the three redundant agents and preserve their history.
+- Consequences: Fewer handoffs; review and QA remain independent of implementation. Reviewer participates early in acceptance criteria/design and verifies exact PR commits.
+
 ### ADR template
 
 Number and title; date; proposed/accepted/superseded status; context; options; decision; consequences; evidence and approval source. A superseding ADR links back to the earlier record.
@@ -60,6 +71,8 @@ Number and title; date; proposed/accepted/superseded status; context; options; d
 ## Decision history
 
 - 2026-10-24: Admin approved a reusable six-agent engineering team, Claude Code developers and Codex specialists, repository-local progressive wiki, room discussions and PR-based code review. KISS, DRY, YAGNI and design-before-coding are required. No product feature scope has been approved yet.
+
+- 2026-10-24: Admin approved consolidation to three agents and renaming eng-dev-1 to eng-dev. Preferred discussions moved to built-in Mattermost rooms after Slack and agent-only rooms did not meet the desired Console chat workflow.
 
 ## Verification record
 
