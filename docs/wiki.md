@@ -128,4 +128,6 @@ Number and title; date; proposed/accepted/superseded status; context; options; d
 
 Initial wiki is documentation only. Repository behavior and architecture have not been independently tested as part of team provisioning. Each subsequent PR must record its own relevant verification.
 
-- 2026-10-24: Codex parity requirements review prepared; questions and proposed criteria await Admin response. No implementation approved. PR #1 current remote status could not be verified because GitHub access failed during review; its wiki branch was read locally.
+- 2026-10-24: Codex parity requirements review prepared; questions and proposed criteria await Admin response. No implementation approved. GitHub identity yuxiaojian and ADMIN access verified; PR #1 remains open at 7738e3c. This scope branch builds on that unmerged documentation branch.
+
+Reviewer input (2026-10-24, room message sw_61327e9f629d49d781dab818c8ec9642): define external ownership conservatively; only control console-owned processes. Explicitly verify native configuration precedence, provider/version capabilities, archive discovery, restart/replay, compaction and browser reconnect. Never silently translate Claude modes or persistent approval scopes into Codex policies. Runtime compatibility remains unverified.
