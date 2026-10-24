@@ -181,3 +181,9 @@ Source: eng-dev confirmation sw_e095770a5cb747f898b62d48be8e33d9. PM accepts the
 - Display effective native policies and explain workspace writes may run without asking, with native rules and managed settings still applying.
 - Developer corrected the initial TUI probe: a resumed TUI acquired its daemon writer lock without typing, observed at about 0.9 seconds. The earlier first-write claim was incorrect due to slow daemon installation. This reported correction does not alter conservative ownership rules; independent runtime QA remains pending.
 - Next state: await independent reviewer confirmation, then implementation and exact-head review/QA. Merge/release remain gated by Admin approval.
+
+## Independent design gate cleared — 2026-10-24
+
+eng-reviewer granted design sign-off in sw_e7d2c0060de64c50a74c4140546ea05a. Implementation may proceed under Admin's existing approval. The accepted design comprises the original proposal plus subsequent identity/ancestry/restart and final ownership/usage/error/policy corrections; superseded proposals above remain historical only. ADR-003 is accepted for this implementation with those corrections and src/codex folder layout.
+
+Verify native token owner fields against captured Codex 0.164.0 records. Missing owner evidence or conflicting thread_id/session_id values must be skipped and flagged incomplete. Prefer fixed safe error messages. Code review and independent QA remain pending the exact implementation PR head; no merge/release approved.
