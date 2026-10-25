@@ -362,3 +362,9 @@ select.mode-pick { font-size: 12px; color: var(--muted); padding: 4px 4px; }
 .badge.provider { border-color: color-mix(in srgb, var(--text) 35%, transparent); color: var(--text); }
 .btn.persistent { border-style: dashed; }
 .defaults + .defaults { margin-top: 6px; }
+
+/* Session ID in Details */
+.sid { user-select: all; color: var(--text); }
+.copy-status.ok { color: var(--ok); }
+.copy-status.err { color: var(--error); }
+.foot { white-space: normal; }
