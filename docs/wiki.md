@@ -262,3 +262,9 @@ eng-dev owns a focused corrective PR from current main in a separate worktree/br
 Developer submitted f6e85200854697a5509be9170a6134bd00d6ef97 on the prior Copy branch with route-change-only guarding (sw_e62ec152404f4f94a18aeb9f7820fbca). GitHub confirms PR #4 remains merged at 5c40629, merge b3623b878d9ba62577cd124971c5d5bdd4e9c043; no corrective PR is open yet. Pushing the old branch does not update main. Developer is instructed to use a new task branch/worktree and corrective PR from current main.
 
 Route-change-only guarding is insufficient for selected-session removal and locked/error views at an unchanged URL. Those cases, active Details identity and retained same-session selection must be verified before clearance. Corrective gate remains open; no new merge/deploy authorization.
+
+## Corrective PR #5 opened — 2026-10-25
+
+Verified OPEN, main base, head 74ecdc0e943ed2536c50ee0fc52432298a7c383c; developer sw_0a60239a77d54e239c8b905ebe4405ff. The fix uses provider-qualified widget keys, native clipboard text, and selection holds only for unchanged route/current Details/session still present/unlocked. It follows earlier candidate failures including shared-native-ID removal and keyboard tab switching.
+
+Developer reports 107/107 tests and the first 20 browser checks passing. Extended exact-head and baseline-main runs remain pending on a loaded machine; no pass is claimed for them. A reproducible synthetic Chrome script is included at scripts/check-copy-session-id.mjs. eng-reviewer is assigned independent exact-head code review and browser recheck of all prior failures, clipboard/fallback, active-view/session validity, navigation/removal/locked/error handling and bounded reuse. Current gate: independent review/QA and outstanding browser evidence; human merge approval follows only after clearance. PR #4 remains merged at its original head; PR #5 is the corrective delivery vehicle. No merge/deploy/release authorized.
