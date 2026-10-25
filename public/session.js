@@ -164,9 +164,11 @@ const idWidgets = new Map();
 
 function sessionId(s) {
   const id = s.nativeId || String(s.id).replace(/^(claude|codex):/, '');
-  let w = idWidgets.get(id);
+  // Cached by the console's provider-qualified key: a Claude and a Codex session can share a native id.
+  let w = idWidgets.get(s.id);
   if (w) return w.el;
-  const text = h('code', { class: 'sid', 'data-hold-selection': '1', title: 'Session ID: select it, or use Copy' }, id);
+  // data-hold-selection names the session (its console key), so renders only wait while it still exists.
+  const text = h('code', { class: 'sid', 'data-hold-selection': s.id, title: 'Session ID: select it, or use Copy' }, id);
   const status = h('span', { class: 'copy-status small', role: 'status', 'aria-live': 'polite' });
   const btn = h('button', { class: 'btn small', type: 'button', 'data-keep-focus': '1', 'aria-label': `Copy session ID ${id}` }, 'Copy');
   let timer = null;
@@ -192,7 +194,7 @@ function sessionId(s) {
     }
   });
   w = { el: h('span', { class: 'sid-wrap' }, text, ' ', btn, ' ', status) };
-  idWidgets.set(id, w);
+  idWidgets.set(s.id, w);
   if (idWidgets.size > 20) idWidgets.delete(idWidgets.keys().next().value);
   return w.el;
 }

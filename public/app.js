@@ -55,12 +55,20 @@ function sidebar(r) {
 }
 
 // ---------- render ----------
-/** Text the user is selecting in an element marked data-hold-selection (the session ID): re-rendering would drop it. */
+/**
+ * The user is selecting the session ID (an element marked data-hold-selection), and a
+ * re-render would drop the selection. Only same-screen updates of the Details view of a
+ * session that still exists wait: navigation, a removed session, another tab or a locked
+ * console always render, so an old Copy target never stays on screen.
+ */
 function holdingSelection() {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.anchorNode) return false;
-  const el = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
-  return Boolean(el?.closest('[data-hold-selection]'));
+  const el = (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement)?.closest('[data-hold-selection]');
+  if (!el || !el.isConnected || location.hash !== lastRoute || state.locked) return false;
+  const id = el.dataset.holdSelection;
+  // Only the session the current screen shows, in its Details tab, and only while it exists.
+  return route().session === id && state.sessionTab === 'details' && state.sessions.some(s => s.id === id);
 }
 let heldRender = false;
 document.addEventListener('selectionchange', () => {
