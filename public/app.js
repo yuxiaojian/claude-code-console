@@ -55,8 +55,21 @@ function sidebar(r) {
 }
 
 // ---------- render ----------
+/** Text the user is selecting in an element marked data-hold-selection (the session ID): re-rendering would drop it. */
+function holdingSelection() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.anchorNode) return false;
+  const el = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+  return Boolean(el?.closest('[data-hold-selection]'));
+}
+let heldRender = false;
+document.addEventListener('selectionchange', () => {
+  if (heldRender && !holdingSelection()) { heldRender = false; render(); }
+});
+
 function render() {
   if (state.editing || state.composing) return; // don't disturb an inline editor or IME input; the next push catches up
+  if (holdingSelection()) { heldRender = true; return; }
   if (state.locked) return showLocked();
   followPending();
   const r = route();

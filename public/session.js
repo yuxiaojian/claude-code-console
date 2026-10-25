@@ -151,9 +151,50 @@ function details(s) {
     contextBar(s),
     subagents(s),
     detail(s),
-    h('div', { class: 'where foot' }, `${providerName(s.provider)} session ${s.nativeId || s.id}`, s.version ? ` · v${s.version}` : '', s.entrypoint ? ` · ${s.entrypoint}` : '',
+    h('div', { class: 'where foot' }, `${providerName(s.provider)} session `, sessionId(s), s.version ? ` · v${s.version}` : '', s.entrypoint ? ` · ${s.entrypoint}` : '',
       s.startedAt ? ` · started ${new Date(s.startedAt).toLocaleString()}` : ''),
   );
+}
+
+// ---------- session id with a Copy button ----------
+// One element per session, reused across re-renders, so a selection, keyboard focus and
+// the copy feedback survive live updates. Copies the native id, which is what
+// `claude --resume` / `codex resume` take, never the console's claude:/codex: key.
+const idWidgets = new Map();
+
+function sessionId(s) {
+  const id = s.nativeId || String(s.id).replace(/^(claude|codex):/, '');
+  let w = idWidgets.get(id);
+  if (w) return w.el;
+  const text = h('code', { class: 'sid', 'data-hold-selection': '1', title: 'Session ID: select it, or use Copy' }, id);
+  const status = h('span', { class: 'copy-status small', role: 'status', 'aria-live': 'polite' });
+  const btn = h('button', { class: 'btn small', type: 'button', 'data-keep-focus': '1', 'aria-label': `Copy session ID ${id}` }, 'Copy');
+  let timer = null;
+  const say = (msg, cls) => {
+    clearTimeout(timer);
+    status.textContent = msg;
+    status.className = `copy-status small ${cls}`;
+    if (cls === 'ok') timer = setTimeout(() => { status.textContent = ''; }, 2000);
+  };
+  btn.addEventListener('click', async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(id);
+      say('Copied', 'ok');
+    } catch {
+      // Select it so ⌘C / Ctrl+C works; re-renders hold off while it's selected.
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      say('Couldn’t copy. The ID is selected: press ⌘C or Ctrl+C.', 'err');
+    }
+  });
+  w = { el: h('span', { class: 'sid-wrap' }, text, ' ', btn, ' ', status) };
+  idWidgets.set(id, w);
+  if (idWidgets.size > 20) idWidgets.delete(idWidgets.keys().next().value);
+  return w.el;
 }
 
 const OPEN_LABELS = { console: 'in console', terminal: 'in terminal', external: 'open elsewhere', unknown: 'may be open elsewhere' };
