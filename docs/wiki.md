@@ -236,3 +236,11 @@ Residual limitations: managed-policy messages/notices have review/fixture covera
 Development and independent review/QA gates are complete for this exact implementation head. Await Admin's explicit merge approval; no merge, deployment or release performed. Documentation PR #2 includes this record and depends on still-open #1; final documentation review is requested separately.
 
 PM accepts explicit refusal, preserved draft text and retry guidance when a policy change is pending during an active turn; automatic deferred sending is unnecessary. This avoids sending under the old policy and is covered by independent recheck (developer clarification sw_ba36164b2df141a2a10bd5d03c6c2407).
+
+## Current delivery update and Copy session ID task — 2026-10-24
+
+GitHub verification: PR #1 is merged; PR #3 merged as 96465d73508852c4717abb28e073f5f34d44d24b at 2026-10-25T02:52:13Z (2026-10-24 local date). Those merges were observed, not performed by PM. Earlier pending-merge entries remain historical. PR #2 remains open; independent documentation review cleared c5339e0 before this update.
+
+User authorized Copy session ID in Details (sw_aaddf267d536a1e9132f8c29bef60432). Scope/acceptance: explicit accessible Copy button, native ID without provider prefix for Claude/Codex, selectable text, click/Enter/Space, success feedback and clipboard failure/unavailable manual-selection guidance. eng-dev owns implementation in a separate worktree/branch; eng-reviewer owns independent exact-head review/QA. No merge/deployment authorization inferred from the request.
+
+PR #4 is open at 5c4062928878a96b9ee1d54889fade55f60e11f6, based on main after PR #3. Developer reports 107 tests and Chromium clipboard readback/fallback/focus checks passing. Implementation reuses the ID node and defers renders during selection because live rerenders dropped manual selection. Reviewer must check clearing selection, route changes and session removal do not stall updates or show stale details, as well as the requested copy behavior. Current Copy task gate: independent review/QA pending, then human merge approval.
