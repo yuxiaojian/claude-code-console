@@ -248,3 +248,5 @@ PR #4 is open at 5c4062928878a96b9ee1d54889fade55f60e11f6, based on main after P
 ## Copy session ID independent clearance — 2026-10-24
 
 Reviewer sw_8e82f04f7c4148c9b65fc149764487cb clears PR #4 at 5c4062928878a96b9ee1d54889fade55f60e11f6 with no blockers. Evidence: https://github.com/yuxiaojian/claude-code-console/pull/4#issuecomment-6394156676. Independent Chrome clipboard readback confirms exact native IDs for Claude/Codex via click/Enter/Space, feedback timeout, focus retention and rejected/missing clipboard manual-selection fallback through rerender. 107/107 tests pass; diff/checkout clean. Synthetic data only; no native sessions changed. Human merge approval requested; no merge/deploy/release performed by PM.
+
+GitHub state correction: PR #4 was already MERGED at the reviewed head when checked. The room merge-approval request was stale and promptly corrected; PM did not perform the merge. Running-app update/restart is not claimed.
