@@ -166,7 +166,8 @@ function sessionId(s) {
   const id = s.nativeId || String(s.id).replace(/^(claude|codex):/, '');
   let w = idWidgets.get(id);
   if (w) return w.el;
-  const text = h('code', { class: 'sid', 'data-hold-selection': '1', title: 'Session ID: select it, or use Copy' }, id);
+  // data-hold-selection names the session (its console key), so renders only wait while it still exists.
+  const text = h('code', { class: 'sid', 'data-hold-selection': s.id, title: 'Session ID: select it, or use Copy' }, id);
   const status = h('span', { class: 'copy-status small', role: 'status', 'aria-live': 'polite' });
   const btn = h('button', { class: 'btn small', type: 'button', 'data-keep-focus': '1', 'aria-label': `Copy session ID ${id}` }, 'Copy');
   let timer = null;
