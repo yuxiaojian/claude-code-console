@@ -69,7 +69,8 @@ document.addEventListener('selectionchange', () => {
 
 function render() {
   if (state.editing || state.composing) return; // don't disturb an inline editor or IME input; the next push catches up
-  if (holdingSelection()) { heldRender = true; return; }
+  // Hold off while the session ID is selected, but never across navigation: a new screen wins.
+  if (location.hash === lastRoute && holdingSelection()) { heldRender = true; return; }
   if (state.locked) return showLocked();
   followPending();
   const r = route();
