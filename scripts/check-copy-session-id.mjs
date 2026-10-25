@@ -222,7 +222,8 @@ await sleep(300);
 check('no clipboard API: ID selected with guidance', (await ev('String(getSelection())')) === cx.nativeId);
 
 // The console locks while the ID is selected.
-await select();
+await ev('getSelection().removeAllRanges()');
+check('selected before locking', (await select()) === cx.nativeId);
 await cdp('Network.enable');
 await cdp('Network.clearBrowserCookies');
 await ev(`window.__es.dispatchEvent(new Event('error'))`);
