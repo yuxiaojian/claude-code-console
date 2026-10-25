@@ -256,3 +256,9 @@ GitHub state correction: PR #4 was already MERGED at the reviewed head when chec
 Reviewer sw_4b77e2591fa6472e99bbf084b215cc1c independently reproduced P2 at 5c40629: selected ID text blocks rerender during hash/history navigation or selected-session removal, leaving stale Details/Copy controls. Finding: https://github.com/yuxiaojian/claude-code-console/pull/4#issuecomment-6394161744. Earlier overall PR #4 clearance is superseded; clipboard/keyboard and suite evidence remain valid. PR #4 is already merged, observed before this finding; no unmerge is attempted.
 
 eng-dev owns a focused corrective PR from current main in a separate worktree/branch under the authorized Copy task. Selection hold must apply only to same-session Details updates while that session exists; navigation/back-forward, removal and locked/error states bypass it. eng-reviewer independently rechecks these edges, correct Copy target, and preserved same-session selection/fallback. Current gate: corrective implementation and exact-head QA pending. No merge/deploy/release authorized. Temporary user workaround: clear selection before navigating.
+
+## Corrective PR packaging and remaining guard cases
+
+Developer submitted f6e85200854697a5509be9170a6134bd00d6ef97 on the prior Copy branch with route-change-only guarding (sw_e62ec152404f4f94a18aeb9f7820fbca). GitHub confirms PR #4 remains merged at 5c40629, merge b3623b878d9ba62577cd124971c5d5bdd4e9c043; no corrective PR is open yet. Pushing the old branch does not update main. Developer is instructed to use a new task branch/worktree and corrective PR from current main.
+
+Route-change-only guarding is insufficient for selected-session removal and locked/error views at an unchanged URL. Those cases, active Details identity and retained same-session selection must be verified before clearance. Corrective gate remains open; no new merge/deploy authorization.
