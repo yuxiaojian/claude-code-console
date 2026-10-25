@@ -19,8 +19,10 @@ export const state = {
   sessions: [],
   projects: [],
   totals: null,
-  runs: [],                 // Claude Code processes the console started
-  chat: false,              // the server can run sessions (Agent SDK installed)
+  runs: [],                 // Claude Code and Codex processes the console started
+  chat: false,              // the server can run sessions for at least one provider
+  providers: { claude: { chat: false }, codex: { chat: false, installed: false } },
+  newProvider: localStorage.getItem('ccc.provider') || 'claude', // provider picked for new sessions
   pending: null,            // { key, pa, from? }: a new or forked session we'll open once it appears
   composing: false,         // IME composition in progress; re-rendering would break it
   locked: false,            // the API wants the access token
@@ -74,8 +76,10 @@ export async function api(method, url, body) {
 
 // ---------- routing ----------
 export function route() {
-  const m = location.hash.match(/^#\/pa\/([a-f0-9]+)(?:\/s\/([\w-]+)|\/(new))?/);
-  return m ? { view: 'pa', pa: m[1], session: m[2] || null, isNew: Boolean(m[3]) } : { view: 'overview' };
+  const m = location.hash.match(/^#\/pa\/([a-f0-9]+)(?:\/s\/([\w:-]+)|\/(new))?/);
+  // Links from before sessions had provider-qualified keys name a Claude session by its bare id.
+  const session = m?.[2] ? (m[2].includes(':') ? m[2] : `claude:${m[2]}`) : null;
+  return m ? { view: 'pa', pa: m[1], session, isNew: Boolean(m[3]) } : { view: 'overview' };
 }
 export const paHref = (pa, session) => `#/pa/${pa}${session === 'new' ? '/new' : session ? `/s/${session}` : ''}`;
 
@@ -113,6 +117,18 @@ export const MODES = [
   ['auto', 'Auto'],
 ];
 export const modeLabel = m => MODES.find(([k]) => k === m)?.[1] || m;
+/** Codex policy presets the console offers, as native approval policy · sandbox (full access is deliberately absent). */
+export const CODEX_MODES = [
+  ['workspace', 'on-request · workspace-write'],
+  ['read-only', 'on-request · read-only'],
+  ['untrusted', 'untrusted · workspace-write'],
+];
+export const codexModeLabel = m => CODEX_MODES.find(([k]) => k === m)?.[1] || m;
+export const POLICY_NOTE = 'Native Codex approval policy and sandbox. Workspace writes may run without asking; your Codex rules and managed settings still apply. A change applies from the next turn: while a turn is running, messages can’t be sent under the old policy until it ends or you stop it.';
+export const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' };
+export const providerName = p => PROVIDER_NAMES[p] || 'Claude';
+/** A session's dollar figure: unknown when some of its usage has no price. */
+export const money = cost => (cost?.usd == null ? 'unknown' : usd(cost.usd));
 
 /** A <select> that holds re-renders while it's open, so the menu doesn't close under the user. */
 export function select(options, value, onchange, props = {}) {
@@ -124,6 +140,9 @@ export function select(options, value, onchange, props = {}) {
 }
 
 export const SPEND_NOTE = 'Estimated from transcript tokens at list price, by the day each call was made';
+export const INCOMPLETE_NOTE = 'Some usage has no known price (Codex models) or could not be attributed, so this total is incomplete';
+/** "+?" after a total that doesn't cover everything. */
+export const incompleteMark = flag => (flag ? h('span', { class: 'quiet', title: INCOMPLETE_NOTE }, ' +?') : null);
 
 export function statusPill(s) {
   return h('span', { class: `pill s-${s.status}`, title: s.phaseSince ? `since ${clock(s.phaseSince)}` : '' },

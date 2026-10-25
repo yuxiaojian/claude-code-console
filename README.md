@@ -8,6 +8,8 @@ A local web console that watches every Claude Code session on your machine and o
 
 You can also **talk to sessions from the browser**: resume one, start a new one in any PA, approve or deny tool calls, answer Claude's questions, review plans, and stop a turn. Each PA can set a default model and permission mode for the sessions the console starts there.
 
+Codex CLI sessions show up too, alongside Claude Code's (see [Codex CLI sessions](#codex-cli-sessions)).
+
 It has three screens, with a sidebar listing your PAs:
 
 | Screen | Shows |
@@ -36,6 +38,8 @@ Options:
       --host <h>   Interface to bind (default 127.0.0.1)
   -d, --days <n>   Load sessions active in the last n days (default 7)
       --dir <path> Transcript directory (default ~/.claude/projects, honours $CLAUDE_CONFIG_DIR)
+      --codex-dir <path>
+                   Codex CLI sessions (default ~/.codex/sessions, honours $CODEX_HOME)
       --config <f> Where PA names, pins, defaults and added folders are saved
                    (default ~/.claude-code-console/config.json; the access
                    token is kept next to it)
@@ -114,6 +118,46 @@ For this to work, transcripts are read oldest-created first. A fork whose origin
 
 **Context** is the total tokens in the main thread's last request, measured against the model's context window. A compaction resets it to the post-compaction size.
 
+## Codex CLI sessions
+
+If the [Codex CLI](https://developers.openai.com/codex) is installed, its sessions show up next to Claude Code's, in the same PAs, marked **Codex**. Desktop-app, IDE and cloud sessions are not included.
+
+**What's shown.** The console reads the rollouts Codex writes under `~/.codex/sessions/` (`src/codex/store.js`). It shows sessions started by the Codex TUI (`codex`), by `codex exec`, or by the console itself. Status, current tool, prompts, subagents, tokens and context come from the rollout. A Codex TUI opened and closed without a prompt is skipped.
+
+**Talking to Codex.** The console runs `codex app-server`, one process per session, through `src/codex/runner.js`. It uses your Codex login and `config.toml`. Codex 0.164.0 is the version tested; with an older or newer version that isn't tested, Codex history still shows, but chat for Codex is off.
+- **New sessions:** pick Claude Code or Codex in the New session pane.
+- **Stop:** if Codex refuses or doesn't answer a Stop, the console says the turn may still be running.
+- **Continuing:** only a Codex session the console is running right now can be continued. Every other Codex session can be **forked**: earlier sessions, ones open in a Codex terminal, and ones the console ran before it restarted. Codex keeps forks as a reference to the parent's history, so forking doesn't duplicate anything. Disconnect and Stop only ever end or interrupt the console's own Codex process.
+- **Approvals and questions:** these come from Codex itself, and each card offers exactly the choices Codex offers. A choice that saves a rule for future sessions says *saved to your Codex rules*. Questions can have secret answers, which are typed into a password field and only sent to Codex. MCP servers that ask for form input can only be declined or cancelled from the console.
+- **Policy:** each Codex session gets one of three native presets, shown as Codex's own approval policy and sandbox:
+
+  | Preset | Approval | Sandbox |
+  |---|---|---|
+  | default | `on-request` | `workspace-write` |
+  | read only | `on-request` | `read-only` |
+  | untrusted | `untrusted` | `workspace-write` |
+
+  - **What applies:** workspace writes may run without asking, and your Codex rules and managed settings still apply. Full access is never offered.
+  - **How it's sent:** every Codex session the console starts or forks sends its preset explicitly.
+  - **Changing it:** a change in the message box applies from the next turn. While a turn is running, a message can't be sent under the old policy: stop the turn or let it finish, then send it again.
+  - **Managed settings:** if they make Codex use a different policy than the one asked for, the console says so and shows what Codex is actually using. If they reject the preset outright, the console says that too.
+  - **Everything else:** model and other settings come from your Codex configuration, unless the PA's ⚙ Defaults set a Codex model. Codex defaults are kept separately from Claude's.
+
+**Open elsewhere.** Codex holds a writer lock per session in `~/.codex/thread-writer-locks/`. Lock files outlive their holders, so the console asks `lsof` which process actually holds one (`src/codex/live.js`).
+- A session another process holds is marked *open elsewhere*. The Codex TUI's background daemon keeps holding a session after its window closes.
+- If `lsof` can't tell, the session is marked *may be open elsewhere*.
+- Either way it is only displayed: Codex sessions are never continued, only forked.
+
+**Cost.** Codex usage is counted from the token record Codex writes for each model response.
+- **Deduplication:** a record counts once, by response id. It only counts in the file of the session it names. Records that can't be attributed are skipped, and the session says so.
+- **Unknown prices:** the console has no list prices for Codex models, so their dollar figure is *unknown* and token counts are shown instead. The figure is also *unknown* when any of a session's records were skipped. Totals that include unpriced or skipped usage are marked **+?**, so they never look complete when they aren't. Dollar figures are API-equivalent estimates, not what a ChatGPT plan bills.
+
+**Errors.** Codex's own error text can contain keys and paths. The browser gets fixed messages such as "not logged in" or "open in another Codex process". The one exception is a failed turn's reason (a rate limit, say), which is shown with anything that looks like a credential or a path removed.
+
+**Verified against Codex CLI 0.164.0.**
+- Exercised live: rollout format and token records, `thread/start`, `thread/fork` (including forking a session another process holds), `turn/start`, `turn/interrupt`, command approvals, `serverRequest/resolved` and writer-lock conflicts.
+- Built from the 0.164.0 protocol schema and fixtures, not exercised live: file-change and permission approvals, questions, MCP elicitation, `turn/steer`, subagent rollouts and compaction events. Unknown shapes are ignored or refused, never guessed at.
+
 ## Security
 
 Transcripts contain your prompts, code and file paths, and the console can run Claude Code, so:
@@ -125,6 +169,7 @@ Transcripts contain your prompts, code and file paths, and the console can run C
 - All transcript text is rendered with `textContent`, never as HTML.
 - Binding to another interface with `--host` prints a warning: the token still applies, but traffic isn't encrypted.
 - Sessions started from the console ask before running tools unless your own permission rules already allow them.
+- Codex routes go through the same checks. Codex's stderr is discarded, and its error text reaches the browser only as fixed messages or redacted.
 
 ## Development
 
@@ -144,8 +189,13 @@ npm start -- -d 7
 | `src/transcript.js` | transcript → conversation items, incremental and cached |
 | `src/runner.js` | running sessions through the Agent SDK, approvals |
 | `src/live.js` | which sessions are open in a terminal |
-| `src/server.js` | HTTP API, SSE stream, static files |
-| `public/` | the UI (vanilla JS modules, no build step): `app.js` shell and sidebar, `overview.js`, `pa.js`, `session.js`, `conversation.js`, `chat.js` message box and approvals, `markdown.js`, `core.js` shared helpers |
+| `src/server.js` | HTTP API, SSE stream, static files; sessions are addressed as `claude:<id>` / `codex:<id>` (a bare id means Claude) |
+| `src/codex/store.js` | Codex rollout → session state, CLI filter, usage attribution, fork ancestry |
+| `src/codex/transcript.js` | Codex rollout → conversation items, including a fork's inherited history |
+| `src/codex/runner.js` | running Codex sessions through `codex app-server`, native approvals and policy presets |
+| `src/codex/live.js` | which Codex sessions another process holds (display only) |
+| `src/codex/errors.js` | safe error messages and redaction |
+| `public/` | the UI (vanilla JS modules, no build step): `app.js` shell and sidebar, `overview.js`, `pa.js`, `session.js`, `conversation.js`, `chat.js` message box and approvals, `codex-cards.js` Codex approval and question cards, `markdown.js`, `core.js` shared helpers |
 
 Transcript formats aren't a public API, so if a Claude Code update changes them, start by looking at `Store.ingest`.
 

@@ -127,13 +127,15 @@ export function buildProjects(sessions, config, { now = Date.now(), days = 7 } =
   const defaultName = root => !root ? '(no folder)'
     : seen.get(base(root)) > 1 ? root.split(/[\\/]/).filter(Boolean).slice(-2).join('/') : base(root);
 
-  const totals = { needs: 0, active: 0, sessions: sessions.length, today: 0, period: 0, days };
+  const totals = { needs: 0, active: 0, sessions: sessions.length, today: 0, period: 0, days, incomplete: false };
   const projects = [];
   for (const { root, sessions: list } of byRoot.values()) {
     const prefs = config.get(root);
     list.sort((a, b) => URGENCY.indexOf(a.status) - URGENCY.indexOf(b.status) || (b.lastActivity || 0) - (a.lastActivity || 0));
     const latest = list.reduce((m, s) => (!m || (s.lastActivity || 0) > (m.lastActivity || 0) ? s : m), null);
     let spendToday = 0, spendPeriod = 0;
+    // Unpriced or skipped usage means the dollar totals don't cover everything.
+    const incomplete = list.some(s => s.cost?.incomplete);
     for (const s of list) {
       for (const [day, usd] of Object.entries(s.spendByDay || {})) {
         if (day === today) spendToday += usd;
@@ -149,14 +151,18 @@ export function buildProjects(sessions, config, { now = Date.now(), days = 7 } =
       added: Boolean(prefs.added),
       model: prefs.model || '',
       permissionMode: prefs.permissionMode || '',
-      models: [...new Set(list.map(s => s.model).filter(m => m && m !== '<synthetic>'))],
+      models: [...new Set(list.filter(s => s.provider !== 'codex').map(s => s.model).filter(m => m && m !== '<synthetic>'))],
+      codexModel: prefs.codexModel || '',
+      codexMode: prefs.codexMode || '',
+      codexModels: [...new Set(list.filter(s => s.provider === 'codex').map(s => s.model).filter(Boolean))],
+      providers: [...new Set(list.map(s => s.provider || 'claude'))],
       status: list[0]?.status || 'empty',
       counts: {
         needs: list.filter(s => NEEDS.has(s.status)).length,
         active: list.filter(s => ACTIVE.has(s.status)).length,
         sessions: list.length,
       },
-      spend: { today: spendToday, period: spendPeriod },
+      spend: { today: spendToday, period: spendPeriod, incomplete },
       lastActivity: latest?.lastActivity || null,
       latest: latest ? { id: latest.id, title: latest.title || latest.lastPrompt || '', status: latest.status } : null,
     };
@@ -165,6 +171,7 @@ export function buildProjects(sessions, config, { now = Date.now(), days = 7 } =
       totals.needs += p.counts.needs;
       totals.active += p.counts.active;
     }
+    if (incomplete) totals.incomplete = true;
     totals.today += spendToday;
     totals.period += spendPeriod;
   }

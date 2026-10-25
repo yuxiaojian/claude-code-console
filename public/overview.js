@@ -1,5 +1,5 @@
 // Overview: what needs you across every PA, and one small card per PA.
-import { NEEDS, SPEND_NOTE, STATUS, ago, dot, h, home, paHref, sessionName, state, usd } from './core.js';
+import { NEEDS, SPEND_NOTE, STATUS, ago, dot, h, home, incompleteMark, paHref, sessionName, state, usd } from './core.js';
 
 const URGENCY = ['question', 'error', 'waiting'];
 
@@ -9,8 +9,8 @@ function stats(t) {
   return h('div', { class: 'stats-strip' },
     stat('need you', t.needs, { cls: t.needs ? 'needs' : '' }),
     stat('working', t.active),
-    stat('today', usd(t.today), { title: SPEND_NOTE }),
-    stat(`last ${t.days} days`, usd(t.period), { title: SPEND_NOTE }),
+    stat('today', [usd(t.today), incompleteMark(t.incomplete)], { title: SPEND_NOTE }),
+    stat(`last ${t.days} days`, [usd(t.period), incompleteMark(t.incomplete)], { title: SPEND_NOTE }),
     stat('sessions', t.sessions),
   );
 }
@@ -68,7 +68,7 @@ export function overview(main) {
     h('section', { class: 'section' },
       h('h2', null, 'Assistants', h('span', null, visible.length)),
       visible.length ? h('div', { class: 'pa-grid' }, visible.map(paCard))
-        : h('p', { class: 'quiet' }, state.projects.length ? 'No assistants match the filter.' : 'No Claude Code sessions found yet. Start one in any terminal, or add a folder.'),
+        : h('p', { class: 'quiet' }, state.projects.length ? 'No assistants match the filter.' : 'No Claude Code or Codex sessions found yet. Start one in any terminal, or add a folder.'),
     ),
     hidden.length ? h('section', { class: 'section' },
       h('button', { class: 'more', onclick: () => { state.showHidden = !state.showHidden; overview(main); } },

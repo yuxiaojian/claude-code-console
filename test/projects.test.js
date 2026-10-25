@@ -70,7 +70,7 @@ test('buildProjects groups, names, totals and orders PAs', () => {
   const pa = projects[1];
   assert.equal(pa.status, 'waiting', 'most urgent session wins');
   assert.deepEqual(pa.counts, { needs: 1, active: 0, sessions: 2 });
-  assert.deepEqual(pa.spend, { today: 1.5, period: 3.5 }, 'spend outside the window is not counted');
+  assert.deepEqual(pa.spend, { today: 1.5, period: 3.5, incomplete: false }, 'spend outside the window is not counted');
   assert.equal(pa.latest.id, 's1');
   assert.equal(sessions[0].pa, pa.id);
   assert.deepEqual({ needs: totals.needs, active: totals.active, today: totals.today }, { needs: 1, active: 1, today: 1.5 });

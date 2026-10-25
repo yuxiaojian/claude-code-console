@@ -38,7 +38,9 @@ test('serves the session list to localhost', () => withServer(async port => {
   assert.equal(r.status, 200);
   const { sessions, projects, totals } = JSON.parse(r.body);
   assert.equal(sessions.length, 1);
-  assert.equal(sessions[0].id, 'abc-123');
+  assert.equal(sessions[0].id, 'claude:abc-123', 'keys are provider-qualified');
+  assert.equal(sessions[0].nativeId, 'abc-123');
+  assert.equal(sessions[0].provider, 'claude');
   assert.equal(sessions[0].log, undefined, 'list view omits the full log');
   assert.equal(sessions[0].pa, projectId('/definitely/not/here'));
   assert.equal(projects[0].name, 'here');
@@ -189,7 +191,7 @@ test('chat endpoints: resume, refuse terminal sessions, answer approvals, reject
     assert.deepEqual(calls.at(-1)[1], { cwd: dir, prompt: 'hi', resume: 'term-1', fork: true, permissionMode: 'default' });
 
     const list = JSON.parse((await request(port, { path: '/api/sessions' })).body);
-    assert.equal(list.sessions.find(s => s.id === 'term-1').openIn, 'terminal');
+    assert.equal(list.sessions.find(s => s.id === 'claude:term-1').openIn, 'terminal');
     assert.equal(list.chat, true);
 
     assert.equal((await post('/api/runs/a00/approvals/toolu_1', { allow: true, always: true, answers: { 'Which?': 'A', bad: 3 } })).status, 200);

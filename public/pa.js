@@ -1,5 +1,5 @@
 // PA screen: one folder's sessions on the left, the selected session on the right.
-import { MODES, SPEND_NOTE, STATUS, ago, api, dot, editable, h, home, modeLabel, paHref, render, select, sessionName, shortModel, state, usd } from './core.js';
+import { CODEX_MODES, MODES, POLICY_NOTE, SPEND_NOTE, STATUS, ago, api, codexModeLabel, dot, editable, h, home, incompleteMark, modeLabel, money, paHref, providerName, render, select, sessionName, shortModel, state, usd } from './core.js';
 import { chatBox } from './chat.js';
 import { costTitle, sessionPane } from './session.js';
 
@@ -23,7 +23,7 @@ function header(p) {
       ),
       h('div', { class: 'row' },
         h('span', { class: 'quiet', title: SPEND_NOTE }, h('b', null, usd(p.spend.today)), ' today · ',
-          h('b', null, usd(p.spend.period)), ` last ${state.totals?.days ?? 7} days`),
+          h('b', null, usd(p.spend.period)), ` last ${state.totals?.days ?? 7} days`, incompleteMark(p.spend.incomplete)),
         state.chat ? h('button', { class: `btn${state.settingsOpen === p.id ? ' on' : ''}`, title: 'Model and permission mode for sessions the console starts here',
           onclick: () => { state.settingsOpen = state.settingsOpen === p.id ? null : p.id; render(); } }, '⚙ Defaults') : null,
         h('button', { class: 'btn', onclick: () => patch(p, { hidden: !p.hidden }).catch(err => alert(err.message)) }, p.hidden ? 'Unhide' : 'Hide'),
@@ -35,22 +35,35 @@ function header(p) {
         p.root ? h('a', { title: `Open ${p.root}`, onclick: () => api('POST', `/api/pas/${p.id}/open`).catch(err => alert(err.message)) }, home(p.root)) : '—'),
       p.model || p.permissionMode ? h('span', { class: 'badge mode', title: 'Defaults for sessions the console starts here' },
         [p.model && shortModel(p.model), p.permissionMode && modeLabel(p.permissionMode)].filter(Boolean).join(' · ')) : null,
+      p.codexModel || p.codexMode ? h('span', { class: 'badge mode', title: 'Defaults for Codex sessions the console starts here' },
+        ['Codex', p.codexModel, p.codexMode && codexModeLabel(p.codexMode)].filter(Boolean).join(' · ')) : null,
     ),
     state.settingsOpen === p.id ? defaults(p) : null,
   );
 }
 
-/** Per-PA defaults for console-started sessions. Terminal sessions keep their own settings. */
+/** Per-PA defaults for console-started sessions, kept separately per provider. Terminal sessions keep their own settings. */
 function defaults(p) {
   const models = [...new Set(['opus', 'sonnet', 'haiku', ...p.models, p.model].filter(Boolean))];
   const save = body => patch(p, body).catch(err => alert(err.message));
-  return h('div', { class: 'defaults' },
+  const claude = h('div', { class: 'defaults' },
+    state.providers.codex?.installed ? h('b', null, 'Claude') : null,
     h('label', null, 'Model',
       select([['', 'Your Claude Code default'], ...models.map(m => [m, m])], p.model, model => save({ model }))),
     h('label', null, 'Permission mode',
       select([['', 'Ask before tools (default)'], ...MODES.filter(([k]) => k !== 'default')], p.permissionMode, permissionMode => save({ permissionMode }))),
     h('span', { class: 'quiet small' }, 'Used when the console starts, resumes or forks a session in this folder. Your permission rules still apply.'),
   );
+  if (!state.providers.codex?.installed) return claude;
+  const codexModels = [...new Set([...(p.codexModels || []), p.codexModel].filter(Boolean))];
+  return [claude, h('div', { class: 'defaults' },
+    h('b', null, 'Codex'),
+    h('label', null, 'Model',
+      select([['', 'Your Codex default'], ...codexModels.map(m => [m, m])], p.codexModel, codexModel => save({ codexModel }))),
+    h('label', { title: POLICY_NOTE }, 'Approval · sandbox',
+      select([['', `${CODEX_MODES[0][1]} (default)`], ...CODEX_MODES.slice(1)], p.codexMode, codexMode => save({ codexMode }))),
+    h('span', { class: 'quiet small' }, 'Used when the console starts or forks a Codex session here. Workspace writes may run without asking; your Codex rules and managed settings still apply.'),
+  )];
 }
 
 async function remove(p) {
@@ -62,12 +75,25 @@ function newSessionLink(p, selected) {
   return h('a', { class: `srow new${selected === 'new' ? ' selected' : ''}`, href: paHref(p.id, 'new') }, h('span', { class: 'glyph' }, '+'), h('span', { class: 'name' }, 'New session'));
 }
 
+/** The provider a new session uses: the user's pick if it can chat, else whichever can. */
+function newProvider() {
+  const ok = k => state.providers[k]?.chat;
+  return ok(state.newProvider) ? state.newProvider : ok('claude') ? 'claude' : ok('codex') ? 'codex' : 'claude';
+}
+
 function newSessionPane(p) {
+  const provider = newProvider();
+  const both = state.providers.claude?.chat && state.providers.codex?.chat;
+  const pick = both ? h('div', { class: 'row' }, h('span', { class: 'quiet' }, 'Start with'),
+    select([['claude', 'Claude Code'], ['codex', 'Codex']], provider, v => { state.newProvider = v; localStorage.setItem('ccc.provider', v); render(); }, { class: 'mode-pick' })) : null;
+  const intro = provider === 'codex'
+    ? `Codex will start in ${home(p.root)} with your Codex settings and the approval policy shown below. Its approval requests and questions appear here.`
+    : `Claude Code will start in ${home(p.root)} with your usual settings, and ask here before running tools.`;
   return h('div', { class: 'session' },
-    h('div', { class: 'session-head' }, h('h2', { class: 'title' }, 'New session'), h('div', { class: 'where pad-b' }, home(p.root))),
+    h('div', { class: 'session-head' }, h('h2', { class: 'title' }, 'New session'), h('div', { class: 'where pad-b' }, home(p.root)), pick),
     h('div', { class: 'conv' }, h('p', { class: 'quiet conv-status' },
-      state.pending?.pa === p.id ? 'Starting Claude Code…' : `Claude Code will start in ${home(p.root)} with your usual settings, and ask here before running tools.`)),
-    chatBox({ pa: p }),
+      state.pending?.pa === p.id ? `Starting ${provider === 'codex' ? 'Codex' : 'Claude Code'}…` : intro)),
+    chatBox({ pa: p, provider }),
   );
 }
 
@@ -85,7 +111,8 @@ function sessionList(p, sessions, selected) {
         dot(s.status),
         h('span', { class: 'name' }, sessionName(s)),
         h('span', { class: 'meta' },
-          h('span', { title: costTitle(s.cost) }, usd(s.cost.usd)),
+          s.provider === 'codex' ? h('span', { class: 'badge provider' }, providerName(s.provider)) : null,
+          h('span', { title: costTitle(s.cost) }, money(s.cost)),
           h('span', null, ago(s.lastActivity)),
         ),
         s.gitBranch && s.gitBranch !== 'HEAD' ? h('span', { class: 'branch small' }, s.gitBranch) : null,
