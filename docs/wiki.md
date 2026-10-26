@@ -34,15 +34,21 @@ For each change, document affected data models, system flows, interfaces, edge c
 
 ## Team and workflow
 
-- eng-pm (Codex): combined PM and architect; requirements, acceptance criteria, design, architecture, ADRs, coordination and wiki edit ownership.
-- eng-dev (Claude Code): sole developer; implementation, tests and PRs. Renamed from eng-dev-1.
-- eng-reviewer (Codex): combined independent code reviewer and QA; early acceptance/design feedback, PR findings, acceptance verification and reproducible defect evidence.
+- eng-pm (Codex): PM and architect; requirements, design, ADRs, coordination and wiki edit ownership.
+- eng-dev-mid (Claude Sonnet): main implementation flow, tests, documentation, PRs and fixes.
+- eng-helper (Claude Haiku): parallel file/document research with source evidence and small assigned errands. Edits require explicit task scope and isolated working files.
+- eng-dev-sr (Claude Opus 5.5): senior adviser, renamed from eng-dev. Reserve its involvement for the checkpoints below rather than routine calls.
+- eng-reviewer (Codex): independent code review and QA, including early acceptance criteria/design feedback and verification against exact PR heads.
 
-The former eng-architect, eng-dev-2 and eng-qa agents are stopped with history preserved. Do not assign them new tasks.
+### Opus checkpoints
 
-Discuss project work in claude-code-console-local; cross-project intake and progress belong in engineering-local. Both are private built-in Mattermost rooms accessible inside Switch Console. Earlier Slack and agent-only rooms retain history but are superseded for new discussions.
+1. Before finalizing a plan: submit requirements, proposed design, edge cases and tradeoffs.
+2. When the same error occurs twice in a task: submit the error, reproduction, two attempts and evidence; obtain diagnosis before repeating the approach.
+3. Before declaring completion: submit the PR/diff, exact commit, test and acceptance evidence, review findings and remaining limitations.
 
-Involve eng-reviewer when defining testable acceptance criteria and substantial designs, then independently review and test the exact implementation PR head. Route fixes back to eng-dev and recheck relevant changes. Human approval is required to merge or release. Record lasting decisions here. Approve additional project/task rooms before creation.
+Sonnet or PM sends a concise targeted request to eng-dev-sr and waits for its advice before crossing each applicable checkpoint. PM records the result in durable task state, the wiki or PR. Opus advice supplements independent review/QA and does not authorize merging or releasing.
+
+Discuss project work in claude-code-console-local; cross-project intake and progress belong in engineering-local. These are the preferred built-in Mattermost rooms in Switch Console. Use separate branches/worktrees for writing tasks; keep lasting decisions here. Human approval remains required for merges/releases and additional rooms. Retired eng-architect, eng-dev-2 and eng-qa remain stopped.
 
 ## Architecture decision records
 
@@ -64,6 +70,15 @@ Involve eng-reviewer when defining testable acceptance criteria and substantial 
 - Decision: eng-pm combines PM and architecture; eng-dev is the sole Claude Code developer; eng-reviewer combines independent code review and QA. Stop the three redundant agents and preserve their history.
 - Consequences: Fewer handoffs; review and QA remain independent of implementation. Reviewer participates early in acceptance criteria/design and verifies exact PR commits.
 
+### ADR-003: Route work by model and reserve Opus for checkpoints
+
+- Date: 2026-10-25
+- Status: Accepted by Admin in the team setup chat; supersedes ADR-002 staffing.
+- Context: Admin wants Sonnet to handle the main coding flow, Haiku to research in parallel, and Opus to advise on significant decisions without routine Opus calls.
+- Options: One developer model for everything; specialist model routing with explicit escalation checkpoints.
+- Decision: Rename eng-dev to eng-dev-sr and pin Opus 5.5; add eng-dev-mid using Sonnet and eng-helper using Haiku. Require Opus before plan finalization, after a repeated error twice, and before completion. Keep PM and independent reviewer/QA on Codex.
+- Consequences: Lower-cost models handle routine work; checkpoint requests need concise evidence and a response before proceeding. Claude Sonnet/Haiku model aliases follow provider resolution. Bypass stays disabled.
+
 ### ADR template
 
 Number and title; date; proposed/accepted/superseded status; context; options; decision; consequences; evidence and approval source. A superseding ADR links back to the earlier record.
@@ -73,6 +88,8 @@ Number and title; date; proposed/accepted/superseded status; context; options; d
 - 2026-10-24: Admin approved a reusable six-agent engineering team, Claude Code developers and Codex specialists, repository-local progressive wiki, room discussions and PR-based code review. KISS, DRY, YAGNI and design-before-coding are required. No product feature scope has been approved yet.
 
 - 2026-10-24: Admin approved consolidation to three agents and renaming eng-dev-1 to eng-dev. Preferred discussions moved to built-in Mattermost rooms after Slack and agent-only rooms did not meet the desired Console chat workflow.
+
+- 2026-10-25: Admin approved the Sonnet/Haiku/Opus routing and eng-dev-sr rename; instructions and active local rooms updated. ADR-003 supersedes three-agent staffing.
 
 ## Verification record
 
