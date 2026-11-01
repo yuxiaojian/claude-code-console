@@ -77,3 +77,11 @@ Number and title; date; proposed/accepted/superseded status; context; options; d
 ## Verification record
 
 Initial wiki is documentation only. Repository behavior and architecture have not been independently tested as part of team provisioning. Each subsequent PR must record its own relevant verification.
+
+## Context status request — 2026-11-01 (CCC-CTX-01)
+
+Admin requested context window status for each agent (sw_92042f9d3d52770463d7ea2a6ee2a549). Current baseline b3623b8 already exposes session.context and a Details bar/live percent. New work should expose context clearly for each session, preserving Claude/Codex semantics and explicit unknowns. Requirements/design pending helper evidence, early reviewer feedback and mandatory senior pre-plan advice; no implementation plan finalized yet.
+
+Candidate criteria: known used/limit and remaining percentage visible per session; no false zero/full-free state for missing telemetry; consistent detail/list display; model changes and compaction update according to provider evidence; parent context never sums subagent totals. Subagent display feasibility must be checked before committing scope. No model price lookup or paid native tasks needed for this initial review.
+
+PM owns docs/status.md and wiki edits. Task communications use the original request thread. Current owner-approved roster is eng-pm, eng-dev-mid, eng-helper, eng-dev-sr and eng-reviewer; old staffing above is historical and pending staffing docs PR #6 remains separate. Older scope/history in open PR #2 is preserved and not rewritten by this task.
