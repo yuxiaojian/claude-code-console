@@ -167,3 +167,18 @@ PM recommends same-record-only Codex context: tokens/window directly from the sa
 ### Post-stop submission preserved, not a new review cycle
 
 Mid submitted69e4d41e00867a6605a7eca4b8b4ea514d453713 with150 developer tests (sw_ff6e3a801d21462fa5df6efa8e716052), adding turn-pruning tombstones and model-conflict handling after PM's stop/scope request. Messages crossed; all specialists instructed to hold this commit unchanged as unreviewed evidence. No further patch/QA cycle authorized while Admin decides same-record-only Codex versus deferral. Senior advice remains limited to revised scope; tests do not reopen the gate.
+
+## ADR-004: Use same-record Codex context evidence
+
+- Date: 2026-11-01.
+- Status: Accepted scope by Admin sw_594d8635e3a80f8126a6b34c6f85b5be; supersedes CCC-CTX-01 turn-pairing proposals above, preserved as history.
+- Context: Three turn-inference designs failed independent replay/eviction/lifecycle QA despite passing suites. Unreliable percentages are worse than explicit missing telemetry.
+- Options: Continue turn inference; same-record-only Codex context; defer Codex and deliver Claude only.
+- Decision: Same-record-only Codex context. Revised senior pre-plan advice sw_88a5136516584e8bab5d927e83ed71bd accepted. token_count info.last_token_usage.total_tokens must be finite/nonnegative; info.model_context_window finite/positive; otherwise independently null. Context model always null/not reported. Never use task_started/turn_context/current model or another record to fill a measured count's missing window. Remove context-only turn cache/state/helpers; lifecycle events retain main status/display/cost behavior only.
+- Partial observation: when no count is known, newest own-record valid window may show used unknown of N; no model and no pairing with later windowless count. Ignore older-than-reading/compaction partials. Window-only telemetry never changes an existing measured reading. Compaction marks stale with pinned window; next valid token_count replaces it. Child stores use their own records; parent unaffected.
+- Consequences: Directly reported known percentages remain available; Codex model identity or missing windows may remain unknown. Claude same-message evidence/conflict handling and accepted UI are unchanged. README/aria/tooltip explicitly explain model not reported. No native TUI-equivalence promise.
+- Verification: replace obsolete turn-pairing expectations with same-record ingestion tests for known count/window, independent unknowns, metadata/closure/replay immunity, partial limits then count, compaction/replay and two children; replay all failed9377 sequences with no context effect. Reviewer-first then senior completion; neither cleared yet.
+
+### CCC-CTX-01 resumed after human scope decision
+
+Admin approved the recommendation; no additional implementation approval required. Mid may implement bounded revised scope on existing PR #8, state chosen base in PR. Senior revised pre-plan checkpoint received; independent QA and senior completion remain pending. Merge/deployment/release still require separate approval.
