@@ -31,3 +31,9 @@ test('contextView: tokens-only reads "no window"; child with no evidence says un
   assert.match(full['aria-label'], /opus-4-5/); assert.match(full['aria-label'], /as of/); assert.match(full['aria-label'], /model table/);
   assert.match(full['aria-label'], /Last reported request/);
 });
+
+test('contextView: a Codex reading says the model is not reported, never a session model', () => {
+  const v = contextView(c({ tokens: 40_000, window: 200_000, pct: 20, windowSource: 'reported', modelNote: 'not reported' }));
+  assert.match(v.title, /model not reported/); assert.match(v.title, /window reported by the provider/);
+  assert.equal(v.label, 'ctx 20%');
+});

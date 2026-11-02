@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { STALE_AFTER_MS, clip, dayKey, estimate, phaseStatus } from '../store.js';
 import { costOf, emptyUsage } from '../pricing.js';
-import { compact, measure, newCtx, summarizeCtx } from '../context.js';
+import { compact, isReplay, measure, newCtx, summarizeCtx } from '../context.js';
 import { redact } from './errors.js';
 
 // Folds Codex CLI rollout files ($CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl) into the
@@ -85,10 +85,7 @@ function newSession(id) {
     apiCalls: 0,
     compactions: 0,
     ctx: newCtx(),           // last context measurement (see context.js)
-    turnInfo: new Map(),     // turn_id -> { model, window }: native identity pairing a turn's model with its window
-    closedTurns: new Set(),  // ids closed or evicted: terminal even after their records are pruned
-    turnEvidenceLost: false, // closedTurns overflowed; unseen ids can't be proven new
-    reportedLimit: null,     // { window, at }: a window reported with no count and no open turn
+    reportedLimit: null,     // { window, at }: a window reported with no usable count, kept only while nothing is measured
     usageByModel: new Map(),
     spendByDay: new Map(),
     responses: new Set(),    // response ids counted; kept for the session's lifetime so a replay can't recount
@@ -97,10 +94,6 @@ function newSession(id) {
     files: [],
   };
 }
-
-const TURN_RECORDS_LIMIT = 200;
-const CLOSED_IDS_LIMIT = 5000;
-const TURN_CONFLICT = '\u0000conflict';
 
 export class CodexStore {
   constructor({ now = () => Date.now() } = {}) {
@@ -182,57 +175,7 @@ export class CodexStore {
     this.version++;
   }
 
-  /** The record for a turn id; any event carrying the id may create it (metadata can precede the start). */
-  #turn(s, id) {
-    let t = s.turnInfo.get(id);
-    if (!t) {
-      if (s.turnInfo.size >= TURN_RECORDS_LIMIT) this.#evictTurn(s);
-      // An id whose evidence was dropped is never re-learned: it stays closed, so no association is inferred.
-      t = { model: null, window: null, startedAt: null, state: s.closedTurns.has(id) || s.turnEvidenceLost ? 'closed' : 'pending' };
-      s.turnInfo.set(id, t);
-    }
-    return t;
-  }
-
-  /** Drop one record, preferring a closed one; its id is remembered as closed so a replay can't reopen it. */
-  #evictTurn(s) {
-    let victim = null;
-    for (const [id, t] of s.turnInfo) if (t.state === 'closed') { victim = id; break; }
-    victim ??= s.turnInfo.keys().next().value;
-    s.turnInfo.delete(victim);
-    this.#rememberClosed(s, victim);
-  }
-
-  #rememberClosed(s, id) {
-    s.closedTurns.delete(id);
-    s.closedTurns.add(id);
-    if (s.closedTurns.size > CLOSED_IDS_LIMIT) {
-      s.closedTurns.delete(s.closedTurns.values().next().value);
-      s.turnEvidenceLost = true; // can no longer prove an unseen id is new: later turns stay unknown
-    }
-  }
-
-  /** The open turn: the open (started, not closed) turn with the greatest start time. */
-  #openTurn(s) {
-    let best = null;
-    for (const t of s.turnInfo.values()) if (t.state === 'open' && (!best || (t.startedAt ?? 0) >= (best.startedAt ?? 0))) best = t;
-    return best;
-  }
-
-  #closeTurn(s, id) {
-    if (typeof id !== 'string' || !id) return;
-    this.#turn(s, id).state = 'closed'; // terminal: never reopens
-    this.#rememberClosed(s, id);
-  }
-
   #turnContext(s, p) {
-    // A model joins a window only through the turn id both records carry; without one it pairs with nothing.
-    if (typeof p.turn_id === 'string' && p.turn_id && typeof p.model === 'string' && p.model) {
-      const t = this.#turn(s, p.turn_id);
-      if (t.state === 'closed') { /* terminal: no new evidence */ }
-      else if (t.model == null) t.model = p.model;
-      else if (t.model !== p.model) t.model = TURN_CONFLICT; // two models for one turn: unproven, resolves as unknown
-    }
     if (typeof p.model === 'string' && p.model) s.model = p.model;
     if (typeof p.approval_policy === 'string') s.approvalPolicy = p.approval_policy;
     if (typeof p.sandbox_policy?.type === 'string') s.sandbox = p.sandbox_policy.type;
@@ -277,25 +220,15 @@ export class CodexStore {
   #event(s, p, ts) {
     switch (p.type) {
       case 'task_started':
-        if (typeof p.turn_id === 'string' && p.turn_id) {
-          const t = this.#turn(s, p.turn_id);
-          if (t.state !== 'closed') {
-            // Starts are idempotent: the first one opens the turn, fixes its start time and window.
-            if (t.state === 'pending') { t.state = 'open'; t.startedAt = ts; }
-            if (t.window == null && Number.isFinite(p.model_context_window) && p.model_context_window > 0) t.window = p.model_context_window;
-          }
-        }
         s.error = null;
         this.#setPhase(s, 'working', ts);
         return;
       case 'task_complete':
-        this.#closeTurn(s, p.turn_id);
         s.pendingTools.clear();
         if (typeof p.last_agent_message === 'string') s.lastAnswer = clip(p.last_agent_message, 400);
         this.#setPhase(s, 'waiting', ts);
         return;
       case 'turn_aborted':
-        this.#closeTurn(s, p.turn_id);
         s.pendingTools.clear();
         this.#setPhase(s, 'waiting', ts);
         this.#log(s, ts, 'info', p.reason === 'interrupted' ? 'Interrupted by user' : 'Turn aborted');
@@ -303,18 +236,14 @@ export class CodexStore {
       case 'token_count': {
         const info = p.info && typeof p.info === 'object' ? p.info : null;
         const last = info?.last_token_usage;
+        // Context comes only from this one record: its count and its own window. No other record
+        // (task_started, turn_context, an earlier count) supplies the window, and the model is not reported.
         const w = info?.model_context_window;
-        const ownWindow = Number.isFinite(w) && w > 0 ? w : null;
-        const turn = this.#openTurn(s);
+        const window = Number.isFinite(w) && w > 0 ? w : null;
         if (Number.isFinite(last?.total_tokens) && last.total_tokens >= 0) {
-          // Window: this record's own, else the open turn's. Model: the open turn's, else unknown.
-          const window = ownWindow ?? turn?.window ?? null;
-          const model = turn && turn.model !== TURN_CONFLICT ? turn.model : null;
-          measure(s.ctx, { tokens: last.total_tokens, model, window, windowSource: window ? 'reported' : null, ts });
-        } else if (ownWindow) {
-          // A window with no count: the open turn's (first write wins), else a partial limit; never a measured reading.
-          if (turn) { if (turn.window == null) turn.window = ownWindow; }
-          else if (!s.reportedLimit || !ts || ts >= s.reportedLimit.at) s.reportedLimit = { window: ownWindow, at: ts ?? 0 };
+          measure(s.ctx, { tokens: last.total_tokens, model: null, window, windowSource: window ? 'reported' : null, ts });
+        } else if (window && s.ctx.tokens == null && !isReplay(s.ctx, ts) && (!s.reportedLimit || !ts || ts >= s.reportedLimit.at)) {
+          s.reportedLimit = { window, at: ts ?? 0 }; // partial observation; never alters a measured reading
         }
         return;
       }
@@ -335,19 +264,16 @@ export class CodexStore {
     }
   }
 
-  /** The context summary; a window reported before any count shows as "used unknown of N". */
+  /** The context summary. Codex does not report a model with a count; a lone reported limit shows as "used unknown of N". */
   #context(s) {
-    const c = summarizeCtx(s.ctx);
-    if (c.tokens != null || c.window != null) return c;
-    const turn = this.#openTurn(s);
-    if (turn?.window) return { ...c, window: turn.window, windowSource: 'reported', model: turn.model !== TURN_CONFLICT ? turn.model : null };
-    if (s.reportedLimit) return { ...c, window: s.reportedLimit.window, windowSource: 'reported', model: null };
+    const c = { ...summarizeCtx(s.ctx), modelNote: 'not reported' };
+    if (c.tokens == null && c.window == null && s.reportedLimit) return { ...c, window: s.reportedLimit.window, windowSource: 'reported' };
     return c;
   }
 
   #compacted(s, ts) {
     s.compactions++;
-    compact(s.ctx, { postTokens: null, model: s.ctx.model, window: s.ctx.window, windowSource: s.ctx.windowSource, ts });
+    compact(s.ctx, { postTokens: null, model: null, window: s.ctx.window, windowSource: s.ctx.windowSource, ts });
     this.#log(s, ts, 'info', 'Compacted');
   }
 

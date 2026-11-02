@@ -128,19 +128,6 @@ const cx = events => {
 const countEv = (sec, total, window, extra = {}) => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { total_tokens: total }, ...(window === undefined ? {} : { model_context_window: window }), ...extra } } });
 const compactedEv = sec => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload: { type: 'context_compacted' } });
 
-test('codex: no usage yet shows the open turn’s reported window with used unknown', () => {
-  const { sum } = cx([meta(ids.a), turnContext(), started(), user('hi')]);
-  const c = sum().context;
-  assert.equal(c.tokens, null); assert.equal(c.window, 400_000); assert.equal(c.pct, null); assert.equal(c.windowSource, 'reported');
-});
-
-test('codex: reading pinned to the turn model with the reported window', () => {
-  const { sum } = cx([meta(ids.a), turnContext(), started(), user('hi'), count(100_000, 5)]);
-  const c = sum().context;
-  assert.equal(c.tokens, 100_000); assert.equal(c.window, 400_000); assert.equal(c.pct, 25);
-  assert.equal(c.model, 'gpt-test'); assert.equal(c.windowSource, 'reported');
-});
-
 test('codex: missing window stays unknown independently; malformed counts ignored', () => {
   const { sum } = cx([meta(ids.a), turnContext(), user('hi'), countEv(5, 1234, undefined), countEv(6, -4), countEv(7, 'x')]);
   const c = sum().context;
@@ -169,12 +156,6 @@ test('codex: an older token_count replayed after compaction is ignored', () => {
   assert.equal(c.tokens, null); assert.equal(c.stale, 'compacted');
 });
 
-test('codex: a model change does not pair an old count with a new window', () => {
-  const { sum } = cx([meta(ids.a), turnContext(1, { model: 'm-one' }), started(), count(100_000, 5), turnContext(6, { model: 'm-two' }), { timestamp: new Date(Date.now() - 60_000 + 7000).toISOString(), type: 'event_msg', payload: { type: 'task_started', turn_id: 't2', model_context_window: 100_000 } }]);
-  const c = sum().context;
-  assert.equal(c.model, 'm-one'); assert.equal(c.window, 400_000); assert.equal(c.pct, 25);
-});
-
 test('codex: children report their own context and leave the parent unchanged', () => {
   const sub = (id, extra) => meta(id, { source: { subagent: { thread_spawn: { parent_thread_id: ids.a, depth: 1 } } }, thread_source: 'subagent', ...extra });
   const f = writeRollouts({
@@ -193,17 +174,6 @@ test('codex: children report their own context and leave the parent unchanged', 
 
 // ---------- regressions found in QA (ingested through the stores) ----------
 const ev = (sec, payload) => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload });
-
-test('codex: task_started / window-only token_count never alter a pinned reading', () => {
-  const { sum } = cx([meta(ids.a), turnContext(), started(), count(80_000, 5),
-    ev(6, { type: 'task_started', turn_id: 't2', model_context_window: 200_000 }),
-    ev(7, { type: 'token_count', info: { model_context_window: 50_000 } }),
-    turnContext(8, { model: 'other-model' })]);
-  const c = sum().context;
-  assert.equal(c.tokens, 80_000); assert.equal(c.window, 400_000); assert.equal(c.pct, 20);
-  assert.equal(c.model, 'gpt-test'); const before = cx([meta(ids.a), turnContext(), started(), count(80_000, 5)]).sum().context;
-  assert.ok(Math.abs(c.at - before.at) < 1000, 'time stays that of the measurement, not the later events');
-});
 
 test('codex: an old window or count replayed later cannot corrupt the newer reading', () => {
   const { sum } = cx([meta(ids.a), turnContext(), started(), count(80_000, 9), countEv(3, 90_000, 50_000)]);
@@ -259,12 +229,6 @@ const tstart = (sec, turn, window) => ({ timestamp: tsx(sec), type: 'event_msg',
 const tctx = (sec, turn, model) => ({ timestamp: tsx(sec), type: 'turn_context', payload: { ...(turn ? { turn_id: turn } : {}), cwd: '/tmp/proj', model } });
 const tcount = (sec, total, window) => countEv(sec, total, window);
 
-test('(a) codex: a late-replayed old turn_context cannot retag a newer reading', () => {
-  const { sum } = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tcount(12, 40_000), tctx(3, 'T1', 'A'), tcount(13, 80_000)]);
-  const c = sum().context;
-  assert.equal(c.model, 'B'); assert.equal(c.window, 400_000); assert.equal(c.pct, 20);
-});
-
 test('(b) claude: a rejected replayed opus line leaves compaction on haiku’s window', () => {
   const st = mk();
   st.ingest(asst(20, 'm1', { input_tokens: 40_000, output_tokens: 0 }, 'claude-haiku-4-5'));
@@ -292,36 +256,6 @@ test('(c) claude main and child: a streamed line without a model keeps its messa
   assert.equal(k.window, null); assert.equal(k.model, null);
 });
 
-test('(d) codex: a window-only token_count before any count is not lost, and never alters a reading', () => {
-  let c = cx([meta(ids.a), tstart(1, 'T1'), tctx(2, 'T1', 'A'), ev(3, { type: 'token_count', info: { model_context_window: 128_000 } })]).sum().context;
-  assert.equal(c.tokens, null); assert.equal(c.window, 128_000); assert.equal(c.pct, null); assert.equal(c.windowSource, 'reported');
-  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tcount(3, 50_000), ev(4, { type: 'token_count', info: { model_context_window: 999 } })]).sum().context;
-  assert.equal(c.window, 100_000); assert.equal(c.pct, 50);
-});
-
-test('(e) codex: A reading survives task_started(B) then turn_context(B); the next count pairs B with B', () => {
-  for (const order of ['start-first', 'ctx-first']) {
-    const head = [meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tcount(3, 50_000)];
-    const turn2 = order === 'start-first' ? [tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B')] : [tctx(10, 'T2', 'B'), tstart(11, 'T2', 400_000)];
-    let c = cx([...head, ...turn2]).sum().context;
-    assert.equal(c.tokens, 50_000, order); assert.equal(c.model, 'A'); assert.equal(c.window, 100_000); assert.equal(c.pct, 50);
-    c = cx([...head, ...turn2, ev(12, { type: 'token_count', info: { last_token_usage: { total_tokens: 100_000 } } })]).sum().context;
-    assert.equal(c.model, 'B'); assert.equal(c.window, 400_000); assert.equal(c.pct, 25, order);
-  }
-});
-
-test('(e2) codex: turn_context without or with a mismatched turn_id never sets the reading model', () => {
-  for (const tc of [tctx(2, null, 'A'), tctx(2, 'OTHER', 'A')]) {
-    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tc, tcount(3, 10_000)]).sum().context;
-    assert.equal(c.model, null); assert.equal(c.window, 100_000); assert.equal(c.tokens, 10_000);
-  }
-});
-
-test('(f) a model change without a new reading keeps the measured label', () => {
-  const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tcount(3, 50_000), tctx(9, 'T2', 'B')]).sum().context;
-  assert.equal(c.model, 'A');
-});
-
 test('claude: compaction with no prior reading shows postTokens with window unknown', () => {
   const st = mk();
   st.ingest(compactEv(5, { postTokens: 3000 }));
@@ -331,58 +265,6 @@ test('claude: compaction with no prior reading shows postTokens with window unkn
 
 const tdone = (sec, turn) => ({ timestamp: tsx(sec), type: 'event_msg', payload: { type: 'task_complete', turn_id: turn, last_agent_message: 'ok' } });
 const tabort = (sec, turn) => ({ timestamp: tsx(sec), type: 'event_msg', payload: { type: 'turn_aborted', turn_id: turn, reason: 'interrupted' } });
-
-test('codex: a count after the turn closed uses only its own window and an unknown model', () => {
-  for (const close of [tdone, tabort]) {
-    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), close(3, 'T1'), tcount(4, 10_000)]).sum().context;
-    assert.equal(c.model, null); assert.equal(c.window, null); assert.equal(c.tokens, 10_000);
-    const own = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), close(3, 'T1'), tcount(4, 10_000, 50_000)]).sum().context;
-    assert.equal(own.window, 50_000); assert.equal(own.model, null); assert.equal(own.pct, 20);
-  }
-});
-
-test('codex: a late old complete or start cannot close or reopen the wrong turn', () => {
-  // T2 is open; a replayed complete for T1 must not close it
-  let c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tdone(3, 'T1'), tcount(12, 40_000)]).sum().context;
-  assert.equal(c.model, 'B'); assert.equal(c.window, 400_000);
-  // T2 completed; a replayed older start for T1 must not reopen T1
-  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tdone(5, 'T1'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tdone(12, 'T2'), tstart(1, 'T1', 100_000), tcount(13, 40_000)]).sum().context;
-  assert.equal(c.model, null, 'no open turn: model unknown'); assert.equal(c.window, null);
-});
-
-test('codex: closed turns are terminal for equal, older and newer starts, complete and abort', () => {
-  for (const close of [tdone, tabort]) for (const sec of [5, 6, 9]) {
-    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), close(5, 'T1'), tstart(sec, 'T1', 999), tcount(11, 10_000)]).sum().context;
-    assert.equal(c.model, null, `${close.name} start@${sec}`); assert.equal(c.window, null);
-  }
-});
-
-test('codex: a turn’s window is first-write-wins against later starts and window-only counts', () => {
-  for (const sec of [0, 1, 9]) {
-    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(sec, 'T1', 555), ev(sec + 1, { type: 'token_count', info: { model_context_window: 777 } }), tcount(10, 10_000, undefined)]).sum().context;
-    assert.equal(c.window, 100_000, `sec ${sec}`); assert.equal(c.pct, 10);
-  }
-});
-
-test('codex: two models for one turn resolve as unknown', () => {
-  const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tctx(3, 'T1', 'B'), tcount(4, 10_000)]).sum().context;
-  assert.equal(c.model, null); assert.equal(c.window, 100_000);
-});
-
-test('codex: metadata before the start is still paired', () => {
-  const c = cx([meta(ids.a), tctx(1, 'T1', 'A'), tstart(2, 'T1', 100_000), tcount(3, 10_000)]).sum().context;
-  assert.equal(c.model, 'A'); assert.equal(c.window, 100_000);
-});
-
-test('codex: a window-only count with no open turn shows used unknown of N, then a real count replaces it', () => {
-  const lone = [meta(ids.a), turnContext(), ev(3, { type: 'token_count', info: { model_context_window: 100 } })];
-  let c = cx(lone).sum().context;
-  assert.equal(c.tokens, null); assert.equal(c.window, 100); assert.equal(c.model, null); assert.equal(c.pct, null);
-  c = cx([...lone, ev(4, { type: 'token_count', info: { last_token_usage: { total_tokens: 5 } } })]).sum().context;
-  assert.equal(c.tokens, 5); assert.equal(c.window, null); assert.equal(c.model, null);
-  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tdone(3, 'T1'), tcount(4, 10_000, 64_000)]).sum().context;
-  assert.equal(c.window, 64_000); assert.equal(c.model, null); assert.equal(c.pct, 15);
-});
 
 test('claude: a model-only line is evidence for a later usage line of the same message.id; conflicts are unknown', () => {
   const st = mk();
@@ -404,14 +286,6 @@ test('claude: a model-only line is evidence for a later usage line of the same m
   assert.equal(k.model, null); assert.equal(k.window, null);
 });
 
-test('codex: pruning turn records never lets an evicted closed turn reopen', () => {
-  const evs = [meta(ids.a)];
-  for (let i = 0; i < 250; i++) evs.push(tstart(1 + i * 0.01, `T${i}`, 100_000), tctx(1 + i * 0.01, `T${i}`, 'A'), tdone(1 + i * 0.01, `T${i}`));
-  evs.push(tstart(30, 'T0', 100_000), tctx(30, 'T0', 'A'), tcount(31, 10_000));
-  const c = cx(evs).sum().context;
-  assert.equal(c.model, null, 'an evicted closed turn stays closed'); assert.equal(c.window, null);
-});
-
 test('claude: a known model conflict is not bypassed by a later line’s own model', () => {
   const st = mk();
   st.ingest(asst(1, 'm1', undefined, 'claude-haiku-4-5', {}));
@@ -419,4 +293,72 @@ test('claude: a known model conflict is not bypassed by a later line’s own mod
   st.ingest(asst(3, 'm1', { input_tokens: 100, output_tokens: 1 }, 'claude-haiku-4-5'));
   const c = ctxOf(st);
   assert.equal(c.model, null); assert.equal(c.window, null); assert.equal(c.tokens, 101);
+});
+
+// ---------- Codex: same-record-only context (ADR-004) ----------
+const xtc = (sec, model = 'gpt-test', turn = 'T1') => tctx(sec, turn, model);
+
+test('codex: a count with its own window gives the exact percent; the model is not reported', () => {
+  const c = cx([meta(ids.a), turnContext(), started(), tcount(5, 100_000, 400_000)]).sum().context;
+  assert.equal(c.tokens, 100_000); assert.equal(c.window, 400_000); assert.equal(c.pct, 25);
+  assert.equal(c.model, null); assert.equal(c.windowSource, 'reported'); assert.equal(c.modelNote, 'not reported');
+});
+
+test('codex: a count without a window has an unknown window, never one from another record', () => {
+  const c = cx([meta(ids.a), tstart(1, 'T1', 400_000), xtc(2), tcount(3, 100_000, 400_000), tcount(4, 50_000, undefined)]).sum().context;
+  assert.equal(c.tokens, 50_000); assert.equal(c.window, null); assert.equal(c.pct, null);
+  const first = cx([meta(ids.a), tstart(1, 'T1', 400_000), xtc(2), tcount(3, 60_000, undefined)]).sum().context;
+  assert.equal(first.window, null, 'task_started window is not used');
+});
+
+test('codex: task_started, turn_context and close events, in any order, replayed or duplicated, never change context', () => {
+  const noise = [tstart(6, 'T1', 999), xtc(7, 'other'), tdone(8, 'T1'), tabort(9, 'T1'), tstart(10, 'T1', 1), tstart(1, 'T0', 5), tdone(2, 'T0'), xtc(3, 'x', 'Z'), xtc(11, 'y', null)];
+  const base = [meta(ids.a), tstart(1, 'T1', 400_000), xtc(2), tcount(5, 100_000, 400_000)];
+  const before = cx(base).sum().context;
+  for (const order of [noise, [...noise].reverse(), [...noise, ...noise]]) {
+    const c = cx([...base, ...order]).sum().context;
+    assert.deepEqual(c, before);
+  }
+});
+
+test('codex: a window-only record shows used unknown of N with no reading, and is ignored after one', () => {
+  const lone = [meta(ids.a), turnContext(), ev(3, { type: 'token_count', info: { model_context_window: 100 } })];
+  let c = cx(lone).sum().context;
+  assert.equal(c.tokens, null); assert.equal(c.window, 100); assert.equal(c.pct, null); assert.equal(c.model, null);
+  c = cx([...lone, ev(2, { type: 'token_count', info: { model_context_window: 7 } })]).sum().context;
+  assert.equal(c.window, 100, 'the newest limit wins; an older one is ignored');
+  c = cx([meta(ids.a), turnContext(), tcount(5, 40_000, 200_000), ev(6, { type: 'token_count', info: { model_context_window: 999 } })]).sum().context;
+  assert.equal(c.window, 200_000); assert.equal(c.pct, 20);
+  c = cx([...lone, ev(4, { type: 'token_count', info: { last_token_usage: { total_tokens: 5 } } })]).sum().context;
+  assert.equal(c.tokens, 5); assert.equal(c.window, null, 'the partial limit is not carried into a count without a window');
+});
+
+test('codex: a replayed older token_count and an older partial limit are ignored', () => {
+  let c = cx([meta(ids.a), turnContext(), tcount(9, 80_000, 400_000), tcount(2, 10_000, 50_000)]).sum().context;
+  assert.equal(c.tokens, 80_000); assert.equal(c.window, 400_000);
+  c = cx([meta(ids.a), turnContext(), tcount(9, 80_000, 400_000), ev(2, { type: 'token_count', info: { model_context_window: 50_000 } })]).sum().context;
+  assert.equal(c.window, 400_000);
+});
+
+test('codex: compaction marks the reading stale and keeps its own window; the next count replaces it', () => {
+  const pre = [meta(ids.a), turnContext(), tcount(5, 300_000, 400_000), compactedEv(6)];
+  let c = cx(pre).sum().context;
+  assert.equal(c.tokens, null); assert.equal(c.pct, null); assert.equal(c.stale, 'compacted'); assert.equal(c.window, 400_000);
+  c = cx([...pre, tcount(8, 20_000, 400_000)]).sum().context;
+  assert.equal(c.tokens, 20_000); assert.equal(c.pct, 5); assert.equal(c.stale, null);
+});
+
+test('codex: failed 9377a3f sequences (eviction, replay, older open turn) have no effect on context', () => {
+  // many closed turns, then a replayed evicted turn's start/context, then a count with no window
+  const evs = [meta(ids.a)];
+  for (let i = 0; i < 250; i++) evs.push(tstart(1 + i * 0.01, `T${i}`, 100_000), xtc(1 + i * 0.01, 'A', `T${i}`), tdone(1 + i * 0.01, `T${i}`));
+  evs.push(tstart(30, 'T0', 100_000), xtc(30, 'A', 'T0'), tcount(31, 10_000, undefined));
+  let c = cx(evs).sum().context;
+  assert.equal(c.window, null); assert.equal(c.model, null); assert.equal(c.pct, null);
+  // an older open turn's window must not back-fill a later count
+  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), xtc(2), tstart(3, 'T2', 200_000), xtc(4, 'B', 'T2'), tdone(5, 'T2'), tcount(6, 10_000, undefined)]).sum().context;
+  assert.equal(c.window, null); assert.equal(c.model, null);
+  // equal-time restart of a completed turn
+  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tdone(5, 'T1'), tstart(5, 'T1', 100_000), tcount(6, 10_000, undefined)]).sum().context;
+  assert.equal(c.window, null);
 });

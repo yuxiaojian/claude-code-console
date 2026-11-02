@@ -8,7 +8,7 @@ const num = n => Number(n).toLocaleString('en-US');
 export function contextView(c) {
   if (!c) return { label: 'ctx ?', short: 'unavailable', level: 'unknown', bar: null, title: 'Context unavailable: nothing reported', over: false };
   const when = c.at ? ` as of ${clock(c.at)}` : '';
-  const model = c.model ? ` on ${shortModel(c.model)}` : '';
+  const model = c.model ? ` on ${shortModel(c.model)}` : c.modelNote ? ` (model ${c.modelNote})` : '';
   const src = c.windowSource === 'reported' ? 'window reported by the provider'
     : c.windowSource === 'model-table' ? 'window from the console’s model table (an estimate)' : '';
   const note = 'Last reported request, not live free capacity.';
