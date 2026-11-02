@@ -86,8 +86,7 @@ function newSession(id) {
     compactions: 0,
     ctx: newCtx(),           // last context measurement (see context.js)
     turnInfo: new Map(),     // turn_id -> { model, window }: native identity pairing a turn's model with its window
-    openTurn: null,          // turn_id of the latest task_started, until that turn completes or aborts
-    openTurnAt: null,
+    reportedLimit: null,     // { window, at }: a window reported with no count and no open turn
     usageByModel: new Map(),
     spendByDay: new Map(),
     responses: new Set(),    // response ids counted; kept for the session's lifetime so a replay can't recount
@@ -96,6 +95,8 @@ function newSession(id) {
     files: [],
   };
 }
+
+const TURN_CONFLICT = '\u0000conflict';
 
 export class CodexStore {
   constructor({ now = () => Date.now() } = {}) {
@@ -177,19 +178,35 @@ export class CodexStore {
     this.version++;
   }
 
+  /** The record for a turn id; any event carrying the id may create it (metadata can precede the start). */
   #turn(s, id) {
     let t = s.turnInfo.get(id);
     if (!t) {
       if (s.turnInfo.size >= 200) s.turnInfo.delete(s.turnInfo.keys().next().value);
-      t = { model: null, window: null };
+      t = { model: null, window: null, startedAt: null, state: 'pending' };
       s.turnInfo.set(id, t);
     }
     return t;
   }
 
+  /** The open turn: the open (started, not closed) turn with the greatest start time. */
+  #openTurn(s) {
+    let best = null;
+    for (const t of s.turnInfo.values()) if (t.state === 'open' && (!best || (t.startedAt ?? 0) >= (best.startedAt ?? 0))) best = t;
+    return best;
+  }
+
+  #closeTurn(s, id) {
+    if (typeof id === 'string' && id) this.#turn(s, id).state = 'closed'; // terminal: never reopens
+  }
+
   #turnContext(s, p) {
     // A model joins a window only through the turn id both records carry; without one it pairs with nothing.
-    if (typeof p.turn_id === 'string' && p.turn_id && typeof p.model === 'string' && p.model) this.#turn(s, p.turn_id).model = p.model;
+    if (typeof p.turn_id === 'string' && p.turn_id && typeof p.model === 'string' && p.model) {
+      const t = this.#turn(s, p.turn_id);
+      if (t.model == null) t.model = p.model;
+      else if (t.model !== p.model) t.model = TURN_CONFLICT; // two models for one turn: unproven, resolves as unknown
+    }
     if (typeof p.model === 'string' && p.model) s.model = p.model;
     if (typeof p.approval_policy === 'string') s.approvalPolicy = p.approval_policy;
     if (typeof p.sandbox_policy?.type === 'string') s.sandbox = p.sandbox_policy.type;
@@ -236,20 +253,23 @@ export class CodexStore {
       case 'task_started':
         if (typeof p.turn_id === 'string' && p.turn_id) {
           const t = this.#turn(s, p.turn_id);
-          if (Number.isFinite(p.model_context_window) && p.model_context_window > 0) t.window = p.model_context_window;
-          if (!s.openTurnAt || !ts || ts >= s.openTurnAt) { s.openTurn = p.turn_id; s.openTurnAt = ts ?? s.openTurnAt; }
+          if (t.state !== 'closed') {
+            // Starts are idempotent: the first one opens the turn, fixes its start time and window.
+            if (t.state === 'pending') { t.state = 'open'; t.startedAt = ts; }
+            if (t.window == null && Number.isFinite(p.model_context_window) && p.model_context_window > 0) t.window = p.model_context_window;
+          }
         }
         s.error = null;
         this.#setPhase(s, 'working', ts);
         return;
       case 'task_complete':
-        if (p.turn_id && p.turn_id === s.openTurn) s.openTurn = null;
+        this.#closeTurn(s, p.turn_id);
         s.pendingTools.clear();
         if (typeof p.last_agent_message === 'string') s.lastAnswer = clip(p.last_agent_message, 400);
         this.#setPhase(s, 'waiting', ts);
         return;
       case 'turn_aborted':
-        if (p.turn_id && p.turn_id === s.openTurn) s.openTurn = null;
+        this.#closeTurn(s, p.turn_id);
         s.pendingTools.clear();
         this.#setPhase(s, 'waiting', ts);
         this.#log(s, ts, 'info', p.reason === 'interrupted' ? 'Interrupted by user' : 'Turn aborted');
@@ -257,16 +277,18 @@ export class CodexStore {
       case 'token_count': {
         const info = p.info && typeof p.info === 'object' ? p.info : null;
         const last = info?.last_token_usage;
+        const w = info?.model_context_window;
+        const ownWindow = Number.isFinite(w) && w > 0 ? w : null;
+        const turn = this.#openTurn(s);
         if (Number.isFinite(last?.total_tokens) && last.total_tokens >= 0) {
-          // Model and window come from this record, or from the open turn (matched by turn id); else unknown.
-          const turn = s.openTurn ? s.turnInfo.get(s.openTurn) : null;
-          const w = info?.model_context_window;
-          const window = Number.isFinite(w) && w > 0 ? w : turn?.window ?? null;
-          measure(s.ctx, { tokens: last.total_tokens, model: turn?.model ?? null, window, windowSource: window ? 'reported' : null, ts });
-        } else if (s.openTurn && Number.isFinite(info?.model_context_window) && info.model_context_window > 0) {
-          // A window with no count belongs to the open turn; it never touches a measured reading.
-          const turn = s.turnInfo.get(s.openTurn);
-          if (turn && !turn.window) turn.window = info.model_context_window;
+          // Window: this record's own, else the open turn's. Model: the open turn's, else unknown.
+          const window = ownWindow ?? turn?.window ?? null;
+          const model = turn && turn.model !== TURN_CONFLICT ? turn.model : null;
+          measure(s.ctx, { tokens: last.total_tokens, model, window, windowSource: window ? 'reported' : null, ts });
+        } else if (ownWindow) {
+          // A window with no count: the open turn's (first write wins), else a partial limit; never a measured reading.
+          if (turn) { if (turn.window == null) turn.window = ownWindow; }
+          else if (!s.reportedLimit || !ts || ts >= s.reportedLimit.at) s.reportedLimit = { window: ownWindow, at: ts ?? 0 };
         }
         return;
       }
@@ -287,13 +309,13 @@ export class CodexStore {
     }
   }
 
-  /** The context summary; a window the open turn reported before any count shows as "used unknown of N". */
+  /** The context summary; a window reported before any count shows as "used unknown of N". */
   #context(s) {
     const c = summarizeCtx(s.ctx);
-    const turn = s.openTurn ? s.turnInfo.get(s.openTurn) : null;
-    if (c.tokens == null && c.window == null && turn?.window) {
-      return { ...c, window: turn.window, windowSource: 'reported', model: c.model ?? turn.model };
-    }
+    if (c.tokens != null || c.window != null) return c;
+    const turn = this.#openTurn(s);
+    if (turn?.window) return { ...c, window: turn.window, windowSource: 'reported', model: turn.model !== TURN_CONFLICT ? turn.model : null };
+    if (s.reportedLimit) return { ...c, window: s.reportedLimit.window, windowSource: 'reported', model: null };
     return c;
   }
 

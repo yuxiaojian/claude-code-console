@@ -346,11 +346,60 @@ test('codex: a late old complete or start cannot close or reopen the wrong turn'
   let c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tdone(3, 'T1'), tcount(12, 40_000)]).sum().context;
   assert.equal(c.model, 'B'); assert.equal(c.window, 400_000);
   // T2 completed; a replayed older start for T1 must not reopen T1
-  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tdone(12, 'T2'), tstart(1, 'T1', 100_000), tcount(13, 40_000)]).sum().context;
+  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tdone(5, 'T1'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tdone(12, 'T2'), tstart(1, 'T1', 100_000), tcount(13, 40_000)]).sum().context;
   assert.equal(c.model, null, 'no open turn: model unknown'); assert.equal(c.window, null);
 });
 
-test('codex: a window-only record with no open turn and no count stays unknown', () => {
-  const c = cx([meta(ids.a), turnContext(), ev(3, { type: 'token_count', info: { model_context_window: 128_000 } })]).sum().context;
-  assert.equal(c.tokens, null); assert.equal(c.window, null);
+test('codex: closed turns are terminal for equal, older and newer starts, complete and abort', () => {
+  for (const close of [tdone, tabort]) for (const sec of [5, 6, 9]) {
+    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), close(5, 'T1'), tstart(sec, 'T1', 999), tcount(11, 10_000)]).sum().context;
+    assert.equal(c.model, null, `${close.name} start@${sec}`); assert.equal(c.window, null);
+  }
+});
+
+test('codex: a turn’s window is first-write-wins against later starts and window-only counts', () => {
+  for (const sec of [0, 1, 9]) {
+    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(sec, 'T1', 555), ev(sec + 1, { type: 'token_count', info: { model_context_window: 777 } }), tcount(10, 10_000, undefined)]).sum().context;
+    assert.equal(c.window, 100_000, `sec ${sec}`); assert.equal(c.pct, 10);
+  }
+});
+
+test('codex: two models for one turn resolve as unknown', () => {
+  const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tctx(3, 'T1', 'B'), tcount(4, 10_000)]).sum().context;
+  assert.equal(c.model, null); assert.equal(c.window, 100_000);
+});
+
+test('codex: metadata before the start is still paired', () => {
+  const c = cx([meta(ids.a), tctx(1, 'T1', 'A'), tstart(2, 'T1', 100_000), tcount(3, 10_000)]).sum().context;
+  assert.equal(c.model, 'A'); assert.equal(c.window, 100_000);
+});
+
+test('codex: a window-only count with no open turn shows used unknown of N, then a real count replaces it', () => {
+  const lone = [meta(ids.a), turnContext(), ev(3, { type: 'token_count', info: { model_context_window: 100 } })];
+  let c = cx(lone).sum().context;
+  assert.equal(c.tokens, null); assert.equal(c.window, 100); assert.equal(c.model, null); assert.equal(c.pct, null);
+  c = cx([...lone, ev(4, { type: 'token_count', info: { last_token_usage: { total_tokens: 5 } } })]).sum().context;
+  assert.equal(c.tokens, 5); assert.equal(c.window, null); assert.equal(c.model, null);
+  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tdone(3, 'T1'), tcount(4, 10_000, 64_000)]).sum().context;
+  assert.equal(c.window, 64_000); assert.equal(c.model, null); assert.equal(c.pct, 15);
+});
+
+test('claude: a model-only line is evidence for a later usage line of the same message.id; conflicts are unknown', () => {
+  const st = mk();
+  st.ingest(asst(1, 'm1', undefined, 'claude-haiku-4-5', {}));
+  st.ingest(asst(2, 'm1', { input_tokens: 1000, output_tokens: 1 }, null));
+  let c = ctxOf(st);
+  assert.equal(c.model, 'claude-haiku-4-5'); assert.equal(c.window, 200_000);
+  st.ingest(asst(3, 'm2', undefined, 'claude-haiku-4-5', {}));
+  st.ingest(asst(4, 'm2', undefined, 'claude-opus-5-5', {}));
+  st.ingest(asst(5, 'm2', { input_tokens: 1000, output_tokens: 2 }, null));
+  c = ctxOf(st);
+  assert.equal(c.model, null); assert.equal(c.window, null);
+  const sub = (sec, id, model, usage) => ({ sessionId: SID, agentId: 'k', isSidechain: true, timestamp: at(sec), type: 'assistant', message: { id, ...(model ? { model } : {}), content: [{ type: 'text', text: 'x' }], ...(usage ? { usage } : {}) } });
+  st.ingest(sub(6, 'c1', 'claude-haiku-4-5')); st.ingest(sub(7, 'c1', null, { input_tokens: 50, output_tokens: 1 }));
+  let k = st.summarize(st.sessions.get(SID)).subagents[0].context;
+  assert.equal(k.model, 'claude-haiku-4-5'); assert.equal(k.window, 200_000);
+  st.ingest(sub(8, 'c2', 'claude-haiku-4-5')); st.ingest(sub(9, 'c2', 'claude-opus-5-5')); st.ingest(sub(10, 'c2', null, { input_tokens: 50, output_tokens: 1 }));
+  k = st.summarize(st.sessions.get(SID)).subagents[0].context;
+  assert.equal(k.model, null); assert.equal(k.window, null);
 });

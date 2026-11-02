@@ -11,6 +11,7 @@ export const ERROR_FOR_MS = 5 * 60_000;      // an API error with no later event
 const LOG_LIMIT = 60;
 const FILES_LIMIT = 12;
 const MSG_USAGE_LIMIT = 512;
+const MODEL_CONFLICT = '\u0000conflict';
 const OWNERS_LIMIT = 500_000; // line uuids remembered for fork detection
 const TEXT_LIMIT = 240;
 
@@ -125,15 +126,16 @@ function newSession(id) {
  * (streamed lines of one response share an id), else unknown. Never the session's current model.
  */
 function messageModel(known, msg) {
+  if (!msg.id) return msg.model && msg.model !== '<synthetic>' ? msg.model : null;
   if (msg.model && msg.model !== '<synthetic>') {
-    if (msg.id) {
-      known.delete(msg.id);
-      known.set(msg.id, msg.model);
-      if (known.size > MSG_USAGE_LIMIT) known.delete(known.keys().next().value);
-    }
-    return msg.model;
+    // First valid model per id wins; a different one later makes the association unproven.
+    const prior = known.get(msg.id);
+    known.delete(msg.id);
+    known.set(msg.id, prior === undefined ? msg.model : prior === msg.model ? prior : MODEL_CONFLICT);
+    if (known.size > MSG_USAGE_LIMIT) known.delete(known.keys().next().value);
   }
-  return (msg.id && known.get(msg.id)) || null;
+  const m = known.get(msg.id);
+  return m === undefined || m === MODEL_CONFLICT ? null : m;
 }
 
 /** Tokens in one request (input + cache + output), or null when the usage block carries no token counts. */
@@ -386,9 +388,9 @@ export class Store {
     }
 
     if (msg.model) s.model = msg.model;
+    const model = messageModel(s.ctxModels, msg); // model-only lines are evidence too
     const tokens = requestTokens(msg.usage);
     if (tokens != null) {
-      const model = messageModel(s.ctxModels, msg);
       const window = contextWindow(model);
       measure(s.ctx, { tokens, model, window, windowSource: window ? 'model-table' : null, ts }, s.compactedAt);
     }
@@ -479,9 +481,9 @@ export class Store {
     this.#subTouch(sub, ts);
     sub.outputTokens += outDelta;
     const msg = e.message || {};
+    const model = messageModel(sub.ctxModels, msg);
     const tokens = msg.model === '<synthetic>' ? null : requestTokens(msg.usage);
     if (tokens != null) {
-      const model = messageModel(sub.ctxModels, msg);
       const window = contextWindow(model);
       measure(sub.ctx, { tokens, model, window, windowSource: window ? 'model-table' : null, ts });
     }
