@@ -135,3 +135,9 @@ Presentation at b42e1ca independently passed 2 formatter tests, both-provider br
 PR #8 verified OPEN at 018fa5bf3ed0b71b6ec79169dff0f04aed60481f. Developer sw_f479367faf794e4190646a487d26efa4 reports Codex turn-ID/open-turn association, Claude same-message-ID association, pinned-model compaction, README typo and ingestion regressions; 141 tests pass in developer run. No final-head browser rerun yet. Both senior completion/recurrence-fix recheck and independent QA remain pending; earlier presentation/store successes are retained as historical evidence.
 
 Requested boundary checks include retained turn-start high-water after close, late/duplicate start/close/abort, no-open-turn counts, metadata in either order and same-message evidence per parent/child. Any repeated association failure stops implementation for senior intervention. No merge/deploy/release authorization.
+
+## CCC-CTX-01 structural recurrence; stopped again — 2026-11-01
+
+Reviewer sw_feb560b7789e4a68bed436e3c12e1c81 independently reproduces at018fa5b: equal-time duplicate completed-turn start reopens it; old same-turn start mutates cached window before replay guard; Claude main/child model-only lines fail to retain same-message evidence; no-open count-less telemetry drops own reported limit. Structural gate not cleared. Original compaction/negative/child fixes remain passing. Reviewer suite140/140 differs from developer141 and is to be reconciled, not silently treated as equivalent.
+
+Latest submitted5742f8e adds closure tests/README only (143 developer count) with same source. Mid stopped further patches under senior's explicit recurrence boundary; senior requested to consolidate terminal turn state, guard-before-cache-mutation, independent model evidence ingestion and own-record nullable telemetry rules. Await response before coding. No overall clearance or merge authorization.

@@ -4,7 +4,7 @@ Updated 2026-11-01 by eng-pm. Read before assignment; wiki contains detailed his
 
 ## Goal and current task
 
-CCC-CTX-01: per-agent/session context status, authorized by sw_92042f9d3d52770463d7ea2a6ee2a549 (also task thread). PR #8 OPEN at 018fa5bf3ed0b71b6ec79169dff0f04aed60481f, branch feat/context-status, base b3623b8. Status: structural fix ready-for-recheck, not done. Developer reports 141 tests. Independent current-head QA and senior completion/recurrence-fix clearance pending. Original four repros resolved at a667635; accessibility/browser/SSE passed b42e1ca. Those historical results do not clear this head.
+CCC-CTX-01: per-agent/session context status, authorized by sw_92042f9d3d52770463d7ea2a6ee2a549 (also task thread). PR #8 OPEN at 5742f8ecfc6ebab4b0448b8ab9fd1f270da26891, branch feat/context-status, base b3623b8. Status: STOPPED for recurring association failures; senior intervention pending. Latest5742f8e adds tests/README only over018fa5b. Developer reports143; reviewer at018 reports140/140 versus developer141, count discrepancy to reconcile. Independent current-head QA and senior completion/recurrence-fix clearance pending. Original four repros resolved at a667635; accessibility/browser/SSE passed b42e1ca. Those historical results do not clear this head.
 
 - eng-pm: requirements, plan, wiki/status; branch docs/context-status-plan in claude-code-console-context-plan, based on origin/main b3623b8.
 - eng-helper: read-only research complete (sw_dab1560aa5114594a5ff6a9d4db90cac).
@@ -23,4 +23,4 @@ CCC-CTX-01: per-agent/session context status, authorized by sw_92042f9d3d5277046
 
 Expose known per-session used/limit/remaining context consistently, labelled last reported; unknown fields stay unknown. Do not use cumulative billed tokens or sum child usage into parent context. Existing detail context bar and live text already exist; verify current provider semantics and gaps before final plan.
 
-Historical independent evidence: initial 125 tests exposed accuracy blockers; a667635 passed 131 and original four repros; b42e1ca presentation/browser/SSE checks passed. Current 018fa5b developer count is 141; independent verification pending. Next: reviewer exact-head review/browser-SSE checks and senior completion response; route fixes to mid and recheck before human merge gate. No default-branch writes/merges/deployments authorized.
+Historical independent evidence: initial 125 tests exposed accuracy blockers; a667635 passed 131 and original four repros; b42e1ca presentation/browser/SSE checks passed. Current 018fa5b developer count is 141; independent structural recheck failed; further patches stopped pending senior advice. Next: reviewer exact-head review/browser-SSE checks and senior completion response; route fixes to mid and recheck before human merge gate. No default-branch writes/merges/deployments authorized.
