@@ -163,3 +163,7 @@ Reviewer-first exact four-repro/variant recheck requested. Senior completion fol
 Reviewer sw_13880a85020f416bb70bcbeacee2a260 independently passes148/148 and original four at9377a3f but reproduces false associations after closed-turn cache eviction/replay, unseen older start after newer close, and fallback to an older unclosed turn. Further QA/patch loop stopped under agreed boundary. Mid told to preserve head unchanged.
 
 PM recommends same-record-only Codex context: tokens/window directly from the same token_count, model unknown unless directly evidenced there; no turn-map inference. Independent nullable telemetry, compaction/replay guards, Claude rules and accepted UI remain required. Alternative is defer Codex and deliver Claude only. Separate root decision sent to Admin; implementation waits approval and senior revised pre-plan advice. No fallback scope is yet approved; completion/QA not clear, no merge/deployment authorization.
+
+### Post-stop submission preserved, not a new review cycle
+
+Mid submitted69e4d41e00867a6605a7eca4b8b4ea514d453713 with150 developer tests (sw_ff6e3a801d21462fa5df6efa8e716052), adding turn-pruning tombstones and model-conflict handling after PM's stop/scope request. Messages crossed; all specialists instructed to hold this commit unchanged as unreviewed evidence. No further patch/QA cycle authorized while Admin decides same-record-only Codex versus deferral. Senior advice remains limited to revised scope; tests do not reopen the gate.
