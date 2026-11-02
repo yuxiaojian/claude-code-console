@@ -4,13 +4,13 @@ Updated 2026-11-01 by eng-pm. Read before assignment; wiki contains detailed his
 
 ## Goal and current task
 
-CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Requirements/design in progress; no coding assigned yet.
+CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Plan finalized after senior advice sw_18dd90a5b1bd486f835063d5ed17748f; implementation assigned to eng-dev-mid. No code started as of this handoff.
 
 - eng-pm: requirements, plan, wiki/status; branch docs/context-status-plan in claude-code-console-context-plan, based on origin/main b3623b8.
-- eng-helper: bounded read-only field/display research, assigned/live response pending.
-- eng-dev-sr: mandatory pre-plan checkpoint requested; advice pending. Completion checkpoint required later; same-error-twice checkpoint if triggered. Neither gate is satisfied merely by requesting advice.
-- eng-reviewer: early acceptance/edge-case review requested; independent exact-head QA required after implementation.
-- eng-dev-mid: intended routine implementation owner; not assigned coding until plan checkpoint resolves.
+- eng-helper: read-only research complete (sw_dab1560aa5114594a5ff6a9d4db90cac).
+- eng-dev-sr: mandatory pre-plan checkpoint passed with updated advice sw_18dd90a5b1bd486f835063d5ed17748f. Completion checkpoint required later; same-error-twice checkpoint if triggered. Neither gate is satisfied merely by requesting advice.
+- eng-reviewer: early acceptance feedback received (sw_d834986f84c14ab486222bdb650cd163); independent exact-head QA required after implementation.
+- eng-dev-mid: implementation owner; isolated branch/worktree, tests and PR per finalized plan below.
 
 ## Existing delivery state (verified GitHub)
 
@@ -23,4 +23,4 @@ CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042
 
 Expose known per-session used/limit/remaining context consistently, labelled last reported; unknown fields stay unknown. Do not use cumulative billed tokens or sum child usage into parent context. Existing detail context bar and live text already exist; verify current provider semantics and gaps before final plan.
 
-Next: collect helper/reviewer feedback and senior pre-plan advice; finalize acceptance/model/flows, assign mid in this thread, then PR + independent QA + senior completion checkpoint, then separate human merge gate. No default-branch writes/merges/deployments authorized.
+Next: mid implements and posts exact-head PR/evidence; independent reviewer QA and senior completion checkpoint required, then separate human merge gate. No default-branch writes/merges/deployments authorized.
