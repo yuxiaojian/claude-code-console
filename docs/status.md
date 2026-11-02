@@ -4,7 +4,7 @@ Updated 2026-11-01 by eng-pm. Read before assignment; wiki contains detailed his
 
 ## Goal and current task
 
-CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Plan finalized after senior advice sw_18dd90a5b1bd486f835063d5ed17748f; implementation ready-for-review in PR #8 at 15dff13b2263c0adda224f03d1ba2fa81fae5a64, branch feat/context-status, based b3623b8. BLOCKED in independent QA: pinned-window mutation/replay, stale compaction ordering, missing Claude child compaction and negative usage validation. Mid owns fixes; reviewer evidence/browser-SSE and senior completion remain pending.
+CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Plan finalized after senior advice sw_18dd90a5b1bd486f835063d5ed17748f; implementation ready-for-review in PR #8 at a667635e12d6c1310eb07bd045fc0e02c020e510, branch feat/context-status, based b3623b8. Fix head submitted for recheck: developer claims all interim context-accuracy blockers resolved with six ingestion regressions, 131 tests passing. Independent original-repro rechecks/browser-SSE and senior completion remain pending; not cleared.
 
 - eng-pm: requirements, plan, wiki/status; branch docs/context-status-plan in claude-code-console-context-plan, based on origin/main b3623b8.
 - eng-helper: read-only research complete (sw_dab1560aa5114594a5ff6a9d4db90cac).
