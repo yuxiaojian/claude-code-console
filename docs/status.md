@@ -4,7 +4,7 @@ Updated 2026-11-01 by eng-pm. Read before assignment; wiki contains detailed his
 
 ## Goal and current task
 
-CCC-CTX-01: per-agent/session context status, authorized by sw_92042f9d3d52770463d7ea2a6ee2a549 (also task thread). PR #8 OPEN at 5742f8ecfc6ebab4b0448b8ab9fd1f270da26891, branch feat/context-status, base b3623b8. Status: STOPPED for recurring association failures; senior intervention pending. Latest5742f8e adds tests/README only over018fa5b. Developer reports143; reviewer at018 reports140/140 versus developer141, count discrepancy to reconcile. Independent current-head QA and senior completion/recurrence-fix clearance pending. Original four repros resolved at a667635; accessibility/browser/SSE passed b42e1ca. Those historical results do not clear this head.
+CCC-CTX-01: per-agent/session context status, authorized by sw_92042f9d3d52770463d7ea2a6ee2a549 (also task thread). PR #8 OPEN at 5742f8ecfc6ebab4b0448b8ab9fd1f270da26891, branch feat/context-status, base b3623b8. Status: STOPPED for recurring association failures; senior intervention pending. Latest5742f8e adds tests/README only over018fa5b. Counts reconciled:018=140/140 (developer141 was incorrect);5742=143/143. Mid accepts four source-level failures; senior older-example clearance at018 does not clear these new repros. Independent current-head QA and senior completion/recurrence-fix clearance pending. Original four repros resolved at a667635; accessibility/browser/SSE passed b42e1ca. Those historical results do not clear this head.
 
 - eng-pm: requirements, plan, wiki/status; branch docs/context-status-plan in claude-code-console-context-plan, based on origin/main b3623b8.
 - eng-helper: read-only research complete (sw_dab1560aa5114594a5ff6a9d4db90cac).
