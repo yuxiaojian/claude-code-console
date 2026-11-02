@@ -157,3 +157,9 @@ Mid resumes implementation then sends stable head to reviewer first; senior comp
 PR #8 submitted at9377a3f7d685727961fe6568b3ec4d92592b1442. Developer sw_b9b85f87f254485e818804cc944e7699 reports148/148, with terminal/idempotent turn state, first-write/cache guards, model-conflict unknowns, no-open partial reported limits, and Claude model-only same-message evidence for parent/child. Earlier late-start test was corrected to actually close its turn. Browser and senior recheck remain unperformed at this head.
 
 Reviewer-first exact four-repro/variant recheck requested. Senior completion follows that result; any further association recurrence stops work for scope reassessment. Developer keeps head stable. No overall clearance, merge/deploy/release authorization.
+
+## CCC-CTX-01 narrow-scope boundary triggered — 2026-11-01
+
+Reviewer sw_13880a85020f416bb70bcbeacee2a260 independently passes148/148 and original four at9377a3f but reproduces false associations after closed-turn cache eviction/replay, unseen older start after newer close, and fallback to an older unclosed turn. Further QA/patch loop stopped under agreed boundary. Mid told to preserve head unchanged.
+
+PM recommends same-record-only Codex context: tokens/window directly from the same token_count, model unknown unless directly evidenced there; no turn-map inference. Independent nullable telemetry, compaction/replay guards, Claude rules and accepted UI remain required. Alternative is defer Codex and deliver Claude only. Separate root decision sent to Admin; implementation waits approval and senior revised pre-plan advice. No fallback scope is yet approved; completion/QA not clear, no merge/deployment authorization.
