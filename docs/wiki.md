@@ -145,3 +145,9 @@ Latest submitted5742f8e adds closure tests/README only (143 developer count) wit
 ### CCC-CTX-01 recheck evidence reconciled
 
 Exact source-level failures posted: https://github.com/yuxiaojian/claude-code-console/pull/8#issuecomment-6566439008. Mid confirms018fa5b=140/140 and5742f8e=143/143, correcting the earlier141 claim. Source diff between those heads is empty (tests/README only). Mid accepts all four failures. Senior late-arriving clearance sw_f506ca2d covers earlier, different examples and does not clear these exact cases or independent QA. PM retains the recurrence stop awaiting senior advice on the new sequences; no completion or merge clearance.
+
+## CCC-CTX-01 terminal-state recurrence response — 2026-11-01
+
+Senior sw_08b8d9a3837b404499bdb66a704c16f7 reproduced all four failures at5742f8e and explicitly withdrew018fa5b clearance. Final confirmation sw_18ca41916f3c468aa01c292bff96cccc allows one bounded pass. Codex turn records pending/open/closed; closed terminal permanently; first start idempotent with immutable startedAt/window; guard-before-mutation; first valid turn window wins and conflicting models resolve unknown. Metadata before start remains valid. No-open own-record limit is partial observation, never combined with unrelated count/model. Claude same-message model evidence is ingested independently of usage for parent/child; conflicts resolve unknown. Repros include equal/older/newer starts/abort, conflicting windows/model evidence and partial-limit transition.
+
+Mid resumes implementation then sends stable head to reviewer first; senior completion recheck must use those exact repro results. Existing clearance is not current. If association fails again, stop and assess narrower same-record-only Codex context (no turn pairing/model inference) rather than another patch loop; no scope change approved yet. No merge/deployment authorization.
