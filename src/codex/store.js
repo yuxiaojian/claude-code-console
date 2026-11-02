@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { STALE_AFTER_MS, clip, dayKey, estimate, phaseStatus } from '../store.js';
 import { costOf, emptyUsage } from '../pricing.js';
+import { compact, isReplay, measure, newCtx, summarizeCtx } from '../context.js';
 import { redact } from './errors.js';
 
 // Folds Codex CLI rollout files ($CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl) into the
@@ -83,8 +84,8 @@ function newSession(id) {
     turns: 0,
     apiCalls: 0,
     compactions: 0,
-    contextTokens: 0,
-    contextWindow: null,
+    ctx: newCtx(),           // last context measurement (see context.js)
+    reportedLimit: null,     // { window, at }: a window reported with no usable count, kept only while nothing is measured
     usageByModel: new Map(),
     spendByDay: new Map(),
     responses: new Set(),    // response ids counted; kept for the session's lifetime so a replay can't recount
@@ -219,7 +220,6 @@ export class CodexStore {
   #event(s, p, ts) {
     switch (p.type) {
       case 'task_started':
-        if (Number.isFinite(p.model_context_window)) s.contextWindow = p.model_context_window;
         s.error = null;
         this.#setPhase(s, 'working', ts);
         return;
@@ -235,9 +235,16 @@ export class CodexStore {
         return;
       case 'token_count': {
         const info = p.info && typeof p.info === 'object' ? p.info : null;
-        if (Number.isFinite(info?.model_context_window)) s.contextWindow = info.model_context_window;
         const last = info?.last_token_usage;
-        if (Number.isFinite(last?.total_tokens)) s.contextTokens = last.total_tokens;
+        // Context comes only from this one record: its count and its own window. No other record
+        // (task_started, turn_context, an earlier count) supplies the window, and the model is not reported.
+        const w = info?.model_context_window;
+        const window = Number.isFinite(w) && w > 0 ? w : null;
+        if (Number.isFinite(last?.total_tokens) && last.total_tokens >= 0) {
+          measure(s.ctx, { tokens: last.total_tokens, model: null, window, windowSource: window ? 'reported' : null, ts });
+        } else if (window && s.ctx.tokens == null && !isReplay(s.ctx, ts) && (!s.reportedLimit || !ts || ts >= s.reportedLimit.at)) {
+          s.reportedLimit = { window, at: ts ?? 0 }; // partial observation; never alters a measured reading
+        }
         return;
       }
       case 'error':
@@ -257,8 +264,16 @@ export class CodexStore {
     }
   }
 
+  /** The context summary. Codex does not report a model with a count; a lone reported limit shows as "used unknown of N". */
+  #context(s) {
+    const c = { ...summarizeCtx(s.ctx), modelNote: 'not reported' };
+    if (c.tokens == null && c.window == null && s.reportedLimit) return { ...c, window: s.reportedLimit.window, windowSource: 'reported' };
+    return c;
+  }
+
   #compacted(s, ts) {
     s.compactions++;
+    compact(s.ctx, { postTokens: null, model: null, window: s.ctx.window, windowSource: s.ctx.windowSource, ts });
     this.#log(s, ts, 'info', 'Compacted');
   }
 
@@ -385,6 +400,7 @@ export class CodexStore {
       type: k.meta.role,
       description: k.meta.nickname || k.lastPrompt || '',
       tool: [...k.pendingTools.values()].at(-1)?.name || '',
+      context: this.#context(k),
       outputTokens: [...k.usageByModel.values()].reduce((n, u) => n + u.output, 0),
       startedAt: k.startedAt,
       lastActivity: k.lastActivity,
@@ -396,7 +412,6 @@ export class CodexStore {
     const pending = [...s.pendingTools.values()].at(-1) || null;
     const parts = s.cwd.split(/[\\/]/).filter(Boolean);
     const incomplete = unknownModels.length > 0 || usageSkipped > 0;
-    const window = s.contextWindow || null;
     return {
       id: s.id,
       provider: 'codex',
@@ -420,7 +435,7 @@ export class CodexStore {
       turns: s.turns,
       apiCalls,
       compactions: s.compactions,
-      context: { tokens: s.contextTokens, window, pct: window ? Math.min(100, (s.contextTokens / window) * 100) : 0 },
+      context: this.#context(s),
       tokens: totals,
       byModel,
       cost: {

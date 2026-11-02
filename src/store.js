@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { compact, measure, newCtx, summarizeCtx } from './context.js';
 import { contextWindow, costOf, emptyUsage, usageFromApi } from './pricing.js';
 
 // How long a session may go without events before we stop trusting its phase.
@@ -10,6 +11,7 @@ export const ERROR_FOR_MS = 5 * 60_000;      // an API error with no later event
 const LOG_LIMIT = 60;
 const FILES_LIMIT = 12;
 const MSG_USAGE_LIMIT = 512;
+const MODEL_CONFLICT = '\u0000conflict';
 const OWNERS_LIMIT = 500_000; // line uuids remembered for fork detection
 const TEXT_LIMIT = 240;
 
@@ -103,8 +105,9 @@ function newSession(id) {
     apiCalls: 0,
     compactions: 0,
     compactedAt: null,       // messages Claude Code replays after compaction carry older timestamps
-    contextTokens: 0,
+    ctx: newCtx(),           // last main-thread context measurement (see context.js)
     usageByModel: new Map(),
+    ctxModels: new Map(),    // message.id -> model, so a streamed line without a model keeps its message's model
     msgUsage: new Map(),     // message.id -> { model, usage } (cumulative per message)
     spendByDay: new Map(),   // dayKey -> estimated USD, for today / this-week totals
     reportedCost: null,
@@ -116,6 +119,36 @@ function newSession(id) {
     log: [],
     files: [],
   };
+}
+
+/**
+ * The model a usage line belongs to: its own, else the one recorded for the same message.id
+ * (streamed lines of one response share an id), else unknown. Never the session's current model.
+ */
+function messageModel(known, msg) {
+  if (!msg.id) return msg.model && msg.model !== '<synthetic>' ? msg.model : null;
+  if (msg.model && msg.model !== '<synthetic>') {
+    // First valid model per id wins; a different one later makes the association unproven.
+    const prior = known.get(msg.id);
+    known.delete(msg.id);
+    known.set(msg.id, prior === undefined ? msg.model : prior === msg.model ? prior : MODEL_CONFLICT);
+    if (known.size > MSG_USAGE_LIMIT) known.delete(known.keys().next().value);
+  }
+  const m = known.get(msg.id);
+  return m === undefined || m === MODEL_CONFLICT ? null : m;
+}
+
+/** Tokens in one request (input + cache + output), or null when the usage block carries no token counts. */
+function requestTokens(usage) {
+  if (!usage || typeof usage !== 'object') return null;
+  const fields = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
+  const split = usage.cache_creation && typeof usage.cache_creation === 'object'
+    ? [usage.cache_creation.ephemeral_5m_input_tokens, usage.cache_creation.ephemeral_1h_input_tokens] : [];
+  // Every component that is present must be a finite, non-negative number, or the total is not trustworthy.
+  const present = [...fields.map(k => usage[k]), ...split].filter(v => v != null);
+  if (!present.length || !present.every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0)) return null;
+  const u = usageFromApi(usage);
+  return u.input + u.cacheWrite5m + u.cacheWrite1h + u.cacheRead + u.output;
 }
 
 /** A session's status from its last phase and how long ago the main thread was active. Shared by providers. */
@@ -175,7 +208,7 @@ export class Store {
       case 'agent-name': if (e.agentName) s.agentName = e.agentName; return;
       case 'permission-mode': return; // handled above
       case 'cost-state': return this.#costState(s, e);
-      case 'system': return isSub ? undefined : this.#system(s, e, ts);
+      case 'system': return isSub ? this.#subSystem(s, e, ts, filePath) : this.#system(s, e, ts);
       case 'user': return isSub ? this.#subUser(s, e, ts, filePath) : this.#user(s, e, ts);
       case 'assistant': return this.#assistant(s, e, ts, isSub, filePath);
       default: return;
@@ -251,8 +284,10 @@ export class Store {
         s.compactions++;
         if (ts) s.compactedAt = ts;
         const post = e.compactMetadata?.postTokens;
-        if (post) s.contextTokens = post;
-        this.#log(s, ts, 'info', `Compacted${post ? ` → ${post.toLocaleString('en-US')} tokens` : ''}`);
+        const known = Number.isFinite(post) && post >= 0;
+        const window = contextWindow(s.ctx.model);
+        compact(s.ctx, { postTokens: post, model: s.ctx.model, window, windowSource: window ? 'model-table' : null, ts });
+        this.#log(s, ts, 'info', `Compacted${known ? ` → ${post.toLocaleString('en-US')} tokens` : ''}`);
         return;
       }
       case 'away_summary':
@@ -353,9 +388,11 @@ export class Store {
     }
 
     if (msg.model) s.model = msg.model;
-    if (msg.usage) {
-      const u = usageFromApi(msg.usage);
-      s.contextTokens = u.input + u.cacheWrite5m + u.cacheWrite1h + u.cacheRead + u.output;
+    const model = messageModel(s.ctxModels, msg); // model-only lines are evidence too
+    const tokens = requestTokens(msg.usage);
+    if (tokens != null) {
+      const window = contextWindow(model);
+      measure(s.ctx, { tokens, model, window, windowSource: window ? 'model-table' : null, ts }, s.compactedAt);
     }
     s.error = null;
 
@@ -397,6 +434,8 @@ export class Store {
         startedAt: null,
         lastActivity: null,
         outputTokens: 0,
+        ctx: newCtx(),
+        ctxModels: new Map(),
         tool: '',
       };
       // Claude Code writes agent-<id>.meta.json next to agent-<id>.jsonl.
@@ -412,6 +451,14 @@ export class Store {
       s.subagents.set(aid, sub);
     }
     return sub;
+  }
+
+  /** A subagent's own compaction: only its context reading changes. */
+  #subSystem(s, e, ts, filePath) {
+    if (e.subtype !== 'compact_boundary') return;
+    const sub = this.#subagent(s, e, filePath);
+    const window = contextWindow(sub.ctx.model);
+    compact(sub.ctx, { postTokens: e.compactMetadata?.postTokens, model: sub.ctx.model, window, windowSource: window ? 'model-table' : null, ts });
   }
 
   #subTouch(sub, ts) {
@@ -434,6 +481,12 @@ export class Store {
     this.#subTouch(sub, ts);
     sub.outputTokens += outDelta;
     const msg = e.message || {};
+    const model = messageModel(sub.ctxModels, msg);
+    const tokens = msg.model === '<synthetic>' ? null : requestTokens(msg.usage);
+    if (tokens != null) {
+      const window = contextWindow(model);
+      measure(sub.ctx, { tokens, model, window, windowSource: window ? 'model-table' : null, ts });
+    }
     for (const b of Array.isArray(msg.content) ? msg.content : []) {
       if (b?.type === 'tool_use') {
         const target = toolTarget(b.name, b.input);
@@ -455,7 +508,6 @@ export class Store {
     const { usd: estimated, unknownModels, totals, byModel } = estimate(s.usageByModel);
     // cost-state is only written when Claude Code exits, so add what we've seen since.
     const sinceReport = s.reportedCost == null ? 0 : Math.max(0, estimated - s.estimatedAtReport);
-    const ctxWindow = contextWindow(s.model);
 
     const subagents = [...s.subagents.values()]
       .filter(a => !a.hidden)
@@ -465,6 +517,7 @@ export class Store {
         description: a.description,
         tool: a.tool,
         outputTokens: a.outputTokens,
+        context: summarizeCtx(a.ctx),
         startedAt: a.startedAt,
         lastActivity: a.lastActivity,
         status: a.done || status === 'ended' ? 'done'
@@ -497,7 +550,7 @@ export class Store {
       turns: s.turns,
       apiCalls: s.apiCalls,
       compactions: s.compactions,
-      context: { tokens: s.contextTokens, window: ctxWindow, pct: Math.min(100, (s.contextTokens / ctxWindow) * 100) },
+      context: summarizeCtx(s.ctx),
       tokens: totals,
       byModel,
       cost: {

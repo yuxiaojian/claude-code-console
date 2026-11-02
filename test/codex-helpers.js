@@ -18,7 +18,7 @@ export const meta = (id, extra = {}, sec = 0) => ({
   timestamp: at(sec), type: 'session_meta',
   payload: { session_id: id, id, timestamp: at(sec), cwd: '/tmp/proj', originator: 'codex-tui', cli_version: '0.164.0', source: 'cli', thread_source: 'user', git: { branch: 'main' }, ...extra },
 });
-export const turnContext = (sec = 1, extra = {}) => ({ timestamp: at(sec), type: 'turn_context', payload: { cwd: '/tmp/proj', approval_policy: 'on-request', sandbox_policy: { type: 'workspace-write' }, model: 'gpt-test', ...extra } });
+export const turnContext = (sec = 1, extra = {}) => ({ timestamp: at(sec), type: 'turn_context', payload: { turn_id: 't1', cwd: '/tmp/proj', approval_policy: 'on-request', sandbox_policy: { type: 'workspace-write' }, model: 'gpt-test', ...extra } });
 export const started = (sec = 1) => ({ timestamp: at(sec), type: 'event_msg', payload: { type: 'task_started', turn_id: 't1', model_context_window: 400_000 } });
 export const user = (text, sec = 2, id = `u-${text}`) => ({ timestamp: at(sec), type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage', id, content: [{ type: 'text', text }] } } });
 export const agent = (text, sec = 3, id = `m-${text}`) => ({ timestamp: at(sec), type: 'event_msg', payload: { type: 'item_completed', item: { type: 'AgentMessage', id, content: [{ type: 'Text', text }] } } });
