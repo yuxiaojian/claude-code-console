@@ -32,8 +32,12 @@ export function measure(ctx, { tokens, model = null, window = null, windowSource
   return true;
 }
 
-/** A compaction: keep a valid post-compaction count, otherwise invalidate until the next report. */
+/**
+ * A compaction: keep a valid post-compaction count, otherwise invalidate until the next report.
+ * A compaction older than the newest measurement or compaction is a replay and changes nothing.
+ */
 export function compact(ctx, { postTokens, model = null, window = null, windowSource = null, ts = null }) {
+  if (isReplay(ctx, ts)) return false;
   if (validTokens(postTokens)) {
     ctx.tokens = postTokens;
     ctx.model = model || null;
@@ -44,7 +48,8 @@ export function compact(ctx, { postTokens, model = null, window = null, windowSo
     ctx.tokens = null;
     ctx.stale = 'compacted';
   }
-  if (ts) ctx.at = Math.max(ctx.at ?? 0, ts);
+  if (ts) ctx.at = ts;
+  return true;
 }
 
 /** The shape sent to the browser. `pct` (integer, floored, may exceed 100) only when both inputs are usable. */

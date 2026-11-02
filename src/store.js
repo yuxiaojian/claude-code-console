@@ -123,7 +123,11 @@ function newSession(id) {
 function requestTokens(usage) {
   if (!usage || typeof usage !== 'object') return null;
   const fields = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
-  if (!fields.some(k => Number.isFinite(usage[k]))) return null;
+  const split = usage.cache_creation && typeof usage.cache_creation === 'object'
+    ? [usage.cache_creation.ephemeral_5m_input_tokens, usage.cache_creation.ephemeral_1h_input_tokens] : [];
+  // Every component that is present must be a finite, non-negative number, or the total is not trustworthy.
+  const present = [...fields.map(k => usage[k]), ...split].filter(v => v != null);
+  if (!present.length || !present.every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0)) return null;
   const u = usageFromApi(usage);
   return u.input + u.cacheWrite5m + u.cacheWrite1h + u.cacheRead + u.output;
 }
@@ -185,7 +189,7 @@ export class Store {
       case 'agent-name': if (e.agentName) s.agentName = e.agentName; return;
       case 'permission-mode': return; // handled above
       case 'cost-state': return this.#costState(s, e);
-      case 'system': return isSub ? undefined : this.#system(s, e, ts);
+      case 'system': return isSub ? this.#subSystem(s, e, ts, filePath) : this.#system(s, e, ts);
       case 'user': return isSub ? this.#subUser(s, e, ts, filePath) : this.#user(s, e, ts);
       case 'assistant': return this.#assistant(s, e, ts, isSub, filePath);
       default: return;
@@ -411,6 +415,7 @@ export class Store {
         lastActivity: null,
         outputTokens: 0,
         ctx: newCtx(),
+        model: null,             // this subagent's latest model
         tool: '',
       };
       // Claude Code writes agent-<id>.meta.json next to agent-<id>.jsonl.
@@ -426,6 +431,14 @@ export class Store {
       s.subagents.set(aid, sub);
     }
     return sub;
+  }
+
+  /** A subagent's own compaction: only its context reading changes. */
+  #subSystem(s, e, ts, filePath) {
+    if (e.subtype !== 'compact_boundary') return;
+    const sub = this.#subagent(s, e, filePath);
+    const window = contextWindow(sub.model);
+    compact(sub.ctx, { postTokens: e.compactMetadata?.postTokens, model: sub.model, window, windowSource: window ? 'model-table' : null, ts });
   }
 
   #subTouch(sub, ts) {
@@ -448,6 +461,7 @@ export class Store {
     this.#subTouch(sub, ts);
     sub.outputTokens += outDelta;
     const msg = e.message || {};
+    if (msg.model && msg.model !== '<synthetic>') sub.model = msg.model;
     const tokens = msg.model === '<synthetic>' ? null : requestTokens(msg.usage);
     if (tokens != null) {
       const window = contextWindow(msg.model);

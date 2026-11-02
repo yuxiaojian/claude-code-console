@@ -219,7 +219,6 @@ export class CodexStore {
   #event(s, p, ts) {
     switch (p.type) {
       case 'task_started':
-        this.#reportedWindow(s, p.model_context_window);
         s.error = null;
         this.#setPhase(s, 'working', ts);
         return;
@@ -237,12 +236,10 @@ export class CodexStore {
         const info = p.info && typeof p.info === 'object' ? p.info : null;
         const last = info?.last_token_usage;
         if (Number.isFinite(last?.total_tokens) && last.total_tokens >= 0) {
-          // Keep an earlier reported window only when it was for this same model.
+          // The window comes only from this same record; a window seen elsewhere is never paired with it.
           const w = info?.model_context_window;
-          const window = Number.isFinite(w) && w > 0 ? w : s.ctx.model === s.model ? s.ctx.window : null;
+          const window = Number.isFinite(w) && w > 0 ? w : null;
           measure(s.ctx, { tokens: last.total_tokens, model: s.model, window, windowSource: window ? 'reported' : null, ts });
-        } else {
-          this.#reportedWindow(s, info?.model_context_window);
         }
         return;
       }
@@ -263,18 +260,9 @@ export class CodexStore {
     }
   }
 
-  /** A window reported without a usable count: record it only if it can't mix models or replay. */
-  #reportedWindow(s, w) {
-    if (!Number.isFinite(w) || w <= 0) return;
-    if (s.ctx.tokens != null && s.ctx.model !== s.model) return;
-    s.ctx.window = w;
-    s.ctx.windowSource = 'reported';
-    s.ctx.model = s.model;
-  }
-
   #compacted(s, ts) {
     s.compactions++;
-    compact(s.ctx, { postTokens: null, ts });
+    compact(s.ctx, { postTokens: null, model: s.model, ts });
     this.#log(s, ts, 'info', 'Compacted');
   }
 

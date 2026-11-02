@@ -128,10 +128,10 @@ const cx = events => {
 const countEv = (sec, total, window, extra = {}) => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { total_tokens: total }, ...(window === undefined ? {} : { model_context_window: window }), ...extra } } });
 const compactedEv = sec => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload: { type: 'context_compacted' } });
 
-test('codex: no usage yet is unknown; a reported window alone leaves used unknown', () => {
+test('codex: no usage yet is unknown; a task_started window alone is not a measurement', () => {
   const { sum } = cx([meta(ids.a), turnContext(), started(), user('hi')]);
   const c = sum().context;
-  assert.equal(c.tokens, null); assert.equal(c.window, 400_000); assert.equal(c.pct, null);
+  assert.equal(c.tokens, null); assert.equal(c.window, null); assert.equal(c.pct, null);
 });
 
 test('codex: reading pinned to the turn model with the reported window', () => {
@@ -189,4 +189,66 @@ test('codex: children report their own context and leave the parent unchanged', 
   const by = Object.fromEntries(s.subagents.map(k => [k.id, k.context]));
   assert.equal(by[ids.b].tokens, 10_000); assert.equal(by[ids.b].pct, 2);
   assert.equal(by[ids.c].tokens, null); assert.equal(by[ids.c].pct, null);
+});
+
+// ---------- regressions found in QA (ingested through the stores) ----------
+const ev = (sec, payload) => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload });
+
+test('codex: task_started / window-only token_count never alter a pinned reading', () => {
+  const { sum } = cx([meta(ids.a), turnContext(), started(), count(80_000, 5),
+    ev(6, { type: 'task_started', turn_id: 't2', model_context_window: 200_000 }),
+    ev(7, { type: 'token_count', info: { model_context_window: 50_000 } }),
+    turnContext(8, { model: 'other-model' })]);
+  const c = sum().context;
+  assert.equal(c.tokens, 80_000); assert.equal(c.window, 400_000); assert.equal(c.pct, 20);
+  assert.equal(c.model, 'gpt-test'); const before = cx([meta(ids.a), turnContext(), started(), count(80_000, 5)]).sum().context;
+  assert.ok(Math.abs(c.at - before.at) < 1000, 'time stays that of the measurement, not the later events');
+});
+
+test('codex: an old window or count replayed later cannot corrupt the newer reading', () => {
+  const { sum } = cx([meta(ids.a), turnContext(), started(), count(80_000, 9), countEv(3, 90_000, 50_000)]);
+  const c = sum().context;
+  assert.equal(c.tokens, 80_000); assert.equal(c.window, 400_000); assert.equal(c.pct, 20);
+});
+
+test('codex: an old compaction replayed after a newer reading does not invalidate it', () => {
+  const { sum } = cx([meta(ids.a), turnContext(), started(), count(80_000, 9), compactedEv(4)]);
+  const c = sum().context;
+  assert.equal(c.tokens, 80_000); assert.equal(c.stale, null);
+  assert.equal(sum().compactions, 1, 'the compaction is still counted');
+});
+
+test('claude: an old compact_boundary does not replace a newer reading', () => {
+  const st = mk();
+  st.ingest(asst(20, 'm1', { input_tokens: 60_000, output_tokens: 0 }));
+  st.ingest(compactEv(5, { postTokens: 1000 }));
+  assert.equal(ctxOf(st).tokens, 60_000);
+  st.ingest(compactEv(6, {}));
+  assert.equal(ctxOf(st).tokens, 60_000); assert.equal(ctxOf(st).stale, null);
+});
+
+test('claude: a subagent compact_boundary updates only that subagent', () => {
+  const st = mk();
+  st.ingest(asst(1, 'm1', { input_tokens: 40_000, output_tokens: 0 }));
+  const sub = (sec, type, extra) => ({ sessionId: SID, agentId: 'a1', isSidechain: true, timestamp: at(sec), type, ...extra });
+  st.ingest(sub(2, 'assistant', { message: { id: 's1', model: 'claude-haiku-4-5', content: [{ type: 'text', text: 'x' }], usage: { input_tokens: 90_000, output_tokens: 0 } } }));
+  st.ingest(sub(3, 'system', { subtype: 'compact_boundary', compactMetadata: { postTokens: 4000 } }));
+  let s = st.summarize(st.sessions.get(SID));
+  assert.equal(s.subagents[0].context.tokens, 4000); assert.equal(s.subagents[0].context.window, 200_000);
+  assert.equal(s.context.tokens, 40_000); assert.equal(s.compactions, 0);
+  st.ingest(sub(3.5, 'system', { subtype: 'compact_boundary', compactMetadata: {} }));
+  s = st.summarize(st.sessions.get(SID));
+  assert.equal(s.subagents[0].context.stale, 'compacted'); assert.equal(s.subagents[0].context.tokens, null);
+  st.ingest(sub(1, 'system', { subtype: 'compact_boundary', compactMetadata: { postTokens: 1 } })); // replay
+  assert.equal(st.summarize(st.sessions.get(SID)).subagents[0].context.stale, 'compacted');
+});
+
+test('claude: a negative or non-numeric usage component makes the reading unknown, never a plausible total', () => {
+  const st = mk();
+  st.ingest(asst(1, 'm1', { input_tokens: 10_000, output_tokens: 0 }));
+  st.ingest(asst(2, 'm2', { input_tokens: 100_000, cache_read_input_tokens: -90_000, output_tokens: 5 }));
+  st.ingest(asst(3, 'm3', { input_tokens: '5', output_tokens: 5 }));
+  st.ingest(asst(4, 'm4', { input_tokens: 5, cache_creation: { ephemeral_5m_input_tokens: -5 }, output_tokens: 5 }));
+  const c = ctxOf(st);
+  assert.equal(c.tokens, 10_000); assert.equal(c.at, T0 + 1000);
 });
