@@ -86,6 +86,8 @@ function newSession(id) {
     compactions: 0,
     ctx: newCtx(),           // last context measurement (see context.js)
     turnInfo: new Map(),     // turn_id -> { model, window }: native identity pairing a turn's model with its window
+    closedTurns: new Set(),  // ids closed or evicted: terminal even after their records are pruned
+    turnEvidenceLost: false, // closedTurns overflowed; unseen ids can't be proven new
     reportedLimit: null,     // { window, at }: a window reported with no count and no open turn
     usageByModel: new Map(),
     spendByDay: new Map(),
@@ -96,6 +98,8 @@ function newSession(id) {
   };
 }
 
+const TURN_RECORDS_LIMIT = 200;
+const CLOSED_IDS_LIMIT = 5000;
 const TURN_CONFLICT = '\u0000conflict';
 
 export class CodexStore {
@@ -182,11 +186,30 @@ export class CodexStore {
   #turn(s, id) {
     let t = s.turnInfo.get(id);
     if (!t) {
-      if (s.turnInfo.size >= 200) s.turnInfo.delete(s.turnInfo.keys().next().value);
-      t = { model: null, window: null, startedAt: null, state: 'pending' };
+      if (s.turnInfo.size >= TURN_RECORDS_LIMIT) this.#evictTurn(s);
+      // An id whose evidence was dropped is never re-learned: it stays closed, so no association is inferred.
+      t = { model: null, window: null, startedAt: null, state: s.closedTurns.has(id) || s.turnEvidenceLost ? 'closed' : 'pending' };
       s.turnInfo.set(id, t);
     }
     return t;
+  }
+
+  /** Drop one record, preferring a closed one; its id is remembered as closed so a replay can't reopen it. */
+  #evictTurn(s) {
+    let victim = null;
+    for (const [id, t] of s.turnInfo) if (t.state === 'closed') { victim = id; break; }
+    victim ??= s.turnInfo.keys().next().value;
+    s.turnInfo.delete(victim);
+    this.#rememberClosed(s, victim);
+  }
+
+  #rememberClosed(s, id) {
+    s.closedTurns.delete(id);
+    s.closedTurns.add(id);
+    if (s.closedTurns.size > CLOSED_IDS_LIMIT) {
+      s.closedTurns.delete(s.closedTurns.values().next().value);
+      s.turnEvidenceLost = true; // can no longer prove an unseen id is new: later turns stay unknown
+    }
   }
 
   /** The open turn: the open (started, not closed) turn with the greatest start time. */
@@ -197,14 +220,17 @@ export class CodexStore {
   }
 
   #closeTurn(s, id) {
-    if (typeof id === 'string' && id) this.#turn(s, id).state = 'closed'; // terminal: never reopens
+    if (typeof id !== 'string' || !id) return;
+    this.#turn(s, id).state = 'closed'; // terminal: never reopens
+    this.#rememberClosed(s, id);
   }
 
   #turnContext(s, p) {
     // A model joins a window only through the turn id both records carry; without one it pairs with nothing.
     if (typeof p.turn_id === 'string' && p.turn_id && typeof p.model === 'string' && p.model) {
       const t = this.#turn(s, p.turn_id);
-      if (t.model == null) t.model = p.model;
+      if (t.state === 'closed') { /* terminal: no new evidence */ }
+      else if (t.model == null) t.model = p.model;
       else if (t.model !== p.model) t.model = TURN_CONFLICT; // two models for one turn: unproven, resolves as unknown
     }
     if (typeof p.model === 'string' && p.model) s.model = p.model;

@@ -403,3 +403,20 @@ test('claude: a model-only line is evidence for a later usage line of the same m
   k = st.summarize(st.sessions.get(SID)).subagents[0].context;
   assert.equal(k.model, null); assert.equal(k.window, null);
 });
+
+test('codex: pruning turn records never lets an evicted closed turn reopen', () => {
+  const evs = [meta(ids.a)];
+  for (let i = 0; i < 250; i++) evs.push(tstart(1 + i * 0.01, `T${i}`, 100_000), tctx(1 + i * 0.01, `T${i}`, 'A'), tdone(1 + i * 0.01, `T${i}`));
+  evs.push(tstart(30, 'T0', 100_000), tctx(30, 'T0', 'A'), tcount(31, 10_000));
+  const c = cx(evs).sum().context;
+  assert.equal(c.model, null, 'an evicted closed turn stays closed'); assert.equal(c.window, null);
+});
+
+test('claude: a known model conflict is not bypassed by a later line’s own model', () => {
+  const st = mk();
+  st.ingest(asst(1, 'm1', undefined, 'claude-haiku-4-5', {}));
+  st.ingest(asst(2, 'm1', undefined, 'claude-opus-5-5', {}));
+  st.ingest(asst(3, 'm1', { input_tokens: 100, output_tokens: 1 }, 'claude-haiku-4-5'));
+  const c = ctxOf(st);
+  assert.equal(c.model, null); assert.equal(c.window, null); assert.equal(c.tokens, 101);
+});
