@@ -129,3 +129,9 @@ Codex: map task_started/turn_context evidence by native turn_id in either order;
 Claude: own message.model or evidence from same message.id, separately for main/child; a new message without model stays unknown. Compaction uses pinned ctx.model, not mutable session model. This supersedes earlier fallback-to-current-model advice. Unknown associations remain unknown. Fix boundary: shared context helper, two store adapters, focused regressions and README typo. Mid sends stable corrected head to reviewer/senior; any repeated association failure stops work for another senior intervention.
 
 Presentation at b42e1ca independently passed 2 formatter tests, both-provider browser/SSE/child updates and full accessible text (reviewer sw_9ede67453ef242c3bd6f996394cfe428); store gate remains open.
+
+## CCC-CTX-01 native-identity fix submitted — 2026-11-01
+
+PR #8 verified OPEN at 018fa5bf3ed0b71b6ec79169dff0f04aed60481f. Developer sw_f479367faf794e4190646a487d26efa4 reports Codex turn-ID/open-turn association, Claude same-message-ID association, pinned-model compaction, README typo and ingestion regressions; 141 tests pass in developer run. No final-head browser rerun yet. Both senior completion/recurrence-fix recheck and independent QA remain pending; earlier presentation/store successes are retained as historical evidence.
+
+Requested boundary checks include retained turn-start high-water after close, late/duplicate start/close/abort, no-open-turn counts, metadata in either order and same-message evidence per parent/child. Any repeated association failure stops implementation for senior intervention. No merge/deploy/release authorization.
