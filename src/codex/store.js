@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { STALE_AFTER_MS, clip, dayKey, estimate, phaseStatus } from '../store.js';
 import { costOf, emptyUsage } from '../pricing.js';
+import { compact, measure, newCtx, summarizeCtx } from '../context.js';
 import { redact } from './errors.js';
 
 // Folds Codex CLI rollout files ($CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl) into the
@@ -83,8 +84,7 @@ function newSession(id) {
     turns: 0,
     apiCalls: 0,
     compactions: 0,
-    contextTokens: 0,
-    contextWindow: null,
+    ctx: newCtx(),           // last context measurement (see context.js)
     usageByModel: new Map(),
     spendByDay: new Map(),
     responses: new Set(),    // response ids counted; kept for the session's lifetime so a replay can't recount
@@ -219,7 +219,7 @@ export class CodexStore {
   #event(s, p, ts) {
     switch (p.type) {
       case 'task_started':
-        if (Number.isFinite(p.model_context_window)) s.contextWindow = p.model_context_window;
+        this.#reportedWindow(s, p.model_context_window);
         s.error = null;
         this.#setPhase(s, 'working', ts);
         return;
@@ -235,9 +235,15 @@ export class CodexStore {
         return;
       case 'token_count': {
         const info = p.info && typeof p.info === 'object' ? p.info : null;
-        if (Number.isFinite(info?.model_context_window)) s.contextWindow = info.model_context_window;
         const last = info?.last_token_usage;
-        if (Number.isFinite(last?.total_tokens)) s.contextTokens = last.total_tokens;
+        if (Number.isFinite(last?.total_tokens) && last.total_tokens >= 0) {
+          // Keep an earlier reported window only when it was for this same model.
+          const w = info?.model_context_window;
+          const window = Number.isFinite(w) && w > 0 ? w : s.ctx.model === s.model ? s.ctx.window : null;
+          measure(s.ctx, { tokens: last.total_tokens, model: s.model, window, windowSource: window ? 'reported' : null, ts });
+        } else {
+          this.#reportedWindow(s, info?.model_context_window);
+        }
         return;
       }
       case 'error':
@@ -257,8 +263,18 @@ export class CodexStore {
     }
   }
 
+  /** A window reported without a usable count: record it only if it can't mix models or replay. */
+  #reportedWindow(s, w) {
+    if (!Number.isFinite(w) || w <= 0) return;
+    if (s.ctx.tokens != null && s.ctx.model !== s.model) return;
+    s.ctx.window = w;
+    s.ctx.windowSource = 'reported';
+    s.ctx.model = s.model;
+  }
+
   #compacted(s, ts) {
     s.compactions++;
+    compact(s.ctx, { postTokens: null, ts });
     this.#log(s, ts, 'info', 'Compacted');
   }
 
@@ -385,6 +401,7 @@ export class CodexStore {
       type: k.meta.role,
       description: k.meta.nickname || k.lastPrompt || '',
       tool: [...k.pendingTools.values()].at(-1)?.name || '',
+      context: summarizeCtx(k.ctx),
       outputTokens: [...k.usageByModel.values()].reduce((n, u) => n + u.output, 0),
       startedAt: k.startedAt,
       lastActivity: k.lastActivity,
@@ -396,7 +413,6 @@ export class CodexStore {
     const pending = [...s.pendingTools.values()].at(-1) || null;
     const parts = s.cwd.split(/[\\/]/).filter(Boolean);
     const incomplete = unknownModels.length > 0 || usageSkipped > 0;
-    const window = s.contextWindow || null;
     return {
       id: s.id,
       provider: 'codex',
@@ -420,7 +436,7 @@ export class CodexStore {
       turns: s.turns,
       apiCalls,
       compactions: s.compactions,
-      context: { tokens: s.contextTokens, window, pct: window ? Math.min(100, (s.contextTokens / window) * 100) : 0 },
+      context: summarizeCtx(s.ctx),
       tokens: totals,
       byModel,
       cost: {

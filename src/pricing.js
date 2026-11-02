@@ -25,16 +25,15 @@ const MODELS = [
   { match: 'claude-3-5-haiku',  input: 0.8, output: 4, cacheRead: 0.08, context: 200_000 },
 ];
 
-const DEFAULT_CONTEXT = 200_000;
-
 export function modelInfo(model) {
   if (!model) return null;
   // Bedrock/Vertex ids look like "us.anthropic.claude-opus-4-7" or "claude-opus-4-5@20251101".
   return MODELS.find(m => model.includes(m.match)) || null;
 }
 
+/** The model's context window from our static table, or null when the model is unknown (no guess). */
 export function contextWindow(model) {
-  return modelInfo(model)?.context ?? DEFAULT_CONTEXT;
+  return modelInfo(model)?.context ?? null;
 }
 
 /**
