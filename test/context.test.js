@@ -328,3 +328,29 @@ test('claude: compaction with no prior reading shows postTokens with window unkn
   const c = ctxOf(st);
   assert.equal(c.tokens, 3000); assert.equal(c.window, null); assert.equal(c.pct, null);
 });
+
+const tdone = (sec, turn) => ({ timestamp: tsx(sec), type: 'event_msg', payload: { type: 'task_complete', turn_id: turn, last_agent_message: 'ok' } });
+const tabort = (sec, turn) => ({ timestamp: tsx(sec), type: 'event_msg', payload: { type: 'turn_aborted', turn_id: turn, reason: 'interrupted' } });
+
+test('codex: a count after the turn closed uses only its own window and an unknown model', () => {
+  for (const close of [tdone, tabort]) {
+    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), close(3, 'T1'), tcount(4, 10_000)]).sum().context;
+    assert.equal(c.model, null); assert.equal(c.window, null); assert.equal(c.tokens, 10_000);
+    const own = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), close(3, 'T1'), tcount(4, 10_000, 50_000)]).sum().context;
+    assert.equal(own.window, 50_000); assert.equal(own.model, null); assert.equal(own.pct, 20);
+  }
+});
+
+test('codex: a late old complete or start cannot close or reopen the wrong turn', () => {
+  // T2 is open; a replayed complete for T1 must not close it
+  let c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tdone(3, 'T1'), tcount(12, 40_000)]).sum().context;
+  assert.equal(c.model, 'B'); assert.equal(c.window, 400_000);
+  // T2 completed; a replayed older start for T1 must not reopen T1
+  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tdone(12, 'T2'), tstart(1, 'T1', 100_000), tcount(13, 40_000)]).sum().context;
+  assert.equal(c.model, null, 'no open turn: model unknown'); assert.equal(c.window, null);
+});
+
+test('codex: a window-only record with no open turn and no count stays unknown', () => {
+  const c = cx([meta(ids.a), turnContext(), ev(3, { type: 'token_count', info: { model_context_window: 128_000 } })]).sum().context;
+  assert.equal(c.tokens, null); assert.equal(c.window, null);
+});
