@@ -4,7 +4,7 @@ Updated 2026-11-01 by eng-pm. Read before assignment; wiki contains detailed his
 
 ## Goal and current task
 
-CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Plan finalized after senior advice sw_18dd90a5b1bd486f835063d5ed17748f; implementation ready-for-review in PR #8 at a667635e12d6c1310eb07bd045fc0e02c020e510, branch feat/context-status, based b3623b8. Fix head submitted for recheck: developer claims all interim context-accuracy blockers resolved with six ingestion regressions, 131 tests passing. Independent original-repro rechecks/browser-SSE and senior completion remain pending; not cleared.
+CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Plan finalized after senior advice sw_18dd90a5b1bd486f835063d5ed17748f; implementation ready-for-review in PR #8 at b42e1ca6bbff009b4e4984bfee7679a39b761680, branch feat/context-status, based b3623b8. BLOCKED: repeated model-metadata replay/pinning defects after first fix; mandatory same-error-twice senior checkpoint invoked and mid paused pending response. Original four repros pass at a667635 (131 independent tests); fresh Codex known-limit-only telemetry and missing-message-model fallback remain unresolved. b42e1ca adds accessibility fixes (132 developer tests), not overall clearance.
 
 - eng-pm: requirements, plan, wiki/status; branch docs/context-status-plan in claude-code-console-context-plan, based on origin/main b3623b8.
 - eng-helper: read-only research complete (sw_dab1560aa5114594a5ff6a9d4db90cac).

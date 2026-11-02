@@ -113,3 +113,9 @@ Mid assigned fixes and store-ingestion regression cases: preserve pinned measure
 ## CCC-CTX-01 corrected head for recheck — 2026-11-01
 
 PR #8 verified OPEN at a667635e12d6c1310eb07bd045fc0e02c020e510. Developer sw_a8d358f7d4634cc4badb523337de465a reports 131 tests and six added store-ingestion regressions, with fixes for Codex pinned-window mutation, stale compaction, Claude child compaction and per-component malformed usage. These are submitted claims, not independent clearance. Reviewer is assigned original repro recheck plus remaining synthetic browser/SSE; senior completion checkpoint updated to this head. Any repeated same failure after fixes triggers the mandatory senior recurrence checkpoint. No merge/deploy/release authorization.
+
+## CCC-CTX-01 recurrence checkpoint — 2026-11-01
+
+Verified PR #8 head b42e1ca6bbff009b4e4984bfee7679a39b761680 adds accessible descriptions/child unavailable and visible known-tokens/no-window wording; developer reports 132 tests, browser not rerun. Reviewer sw_8b2687bef81c4de7ad3491bdad2305b2 independently passes original four repros and 131 tests at a667635, but reproduces recurring replay/model-pinning defects through old Codex turn_context and old Claude assistant model metadata affecting later usage/compaction. Fresh Codex window-only telemetry also loses valid known limit. Senior initial checkpoint sw_0b55c01a6491465ba2facf9a34a929c5 flags missing-message-model fallback inconsistent with known main/child model.
+
+Mandatory same-error-twice senior checkpoint invoked; mid instructed to pause further implementation at b42e1ca until senior gives coherent model/time/turn and pending-window advice. Independent unknown count/known limit must be retained without mutating an existing pinned measurement. Completion remains separately uncleared; no merge/deployment approval. Initial-head browser/SSE passes are historical evidence, not store correctness clearance.
