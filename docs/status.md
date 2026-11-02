@@ -4,7 +4,7 @@ Updated 2026-11-01 by eng-pm. Read before assignment; wiki contains detailed his
 
 ## Goal and current task
 
-CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Plan finalized after senior advice sw_18dd90a5b1bd486f835063d5ed17748f; implementation ready-for-review in PR #8 at 15dff13b2263c0adda224f03d1ba2fa81fae5a64, branch feat/context-status, based b3623b8. Not done: independent review/browser-SSE QA and senior completion checkpoint pending.
+CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042f9d3d52770463d7ea2a6ee2a549). Task thread is that message in claude-code-console-local. Plan finalized after senior advice sw_18dd90a5b1bd486f835063d5ed17748f; implementation ready-for-review in PR #8 at 15dff13b2263c0adda224f03d1ba2fa81fae5a64, branch feat/context-status, based b3623b8. BLOCKED in independent QA: pinned-window mutation/replay, stale compaction ordering, missing Claude child compaction and negative usage validation. Mid owns fixes; reviewer evidence/browser-SSE and senior completion remain pending.
 
 - eng-pm: requirements, plan, wiki/status; branch docs/context-status-plan in claude-code-console-context-plan, based on origin/main b3623b8.
 - eng-helper: read-only research complete (sw_dab1560aa5114594a5ff6a9d4db90cac).
@@ -23,4 +23,4 @@ CCC-CTX-01: show context-window status per agent/session (Admin request sw_92042
 
 Expose known per-session used/limit/remaining context consistently, labelled last reported; unknown fields stay unknown. Do not use cumulative billed tokens or sum child usage into parent context. Existing detail context bar and live text already exist; verify current provider semantics and gaps before final plan.
 
-Developer reports 125 tests (107 baseline + 18 new) passing; browser/SSE evidence not yet produced. Next: reviewer exact-head review/browser-SSE checks and senior completion response; route fixes to mid and recheck before human merge gate. No default-branch writes/merges/deployments authorized.
+Reviewer independently confirms 125/125 tests pass at 15dff13, but controlled store repros expose accuracy blockers; browser/SSE evidence not yet produced. Next: reviewer exact-head review/browser-SSE checks and senior completion response; route fixes to mid and recheck before human merge gate. No default-branch writes/merges/deployments authorized.

@@ -103,3 +103,9 @@ Acceptance/verification: provider fixtures for independently missing usage/limit
 PR #8 verified OPEN at 15dff13b2263c0adda224f03d1ba2fa81fae5a64 (feat/context-status, base b3623b8). Developer reports pinned nullable context for both providers, compaction/replay/model correctness, independent child context and shared UI formatter, with README update. Reported 125 tests pass (107 baseline plus 18 context tests); no real browser/SSE checks performed yet. Developer message sw_96c81ffe357343bf9f9f1515d1c7a739.
 
 State is ready-for-review, not done. PM requested independent exact-head code review + synthetic browser/SSE QA from eng-reviewer and mandatory completion advice from eng-dev-sr; both responses pending. Mid keeps the head stable and owns required fixes. No paid native tasks, merge, deployment or release authorized. Senior checkpoint advice supplements, not replaces, independent QA and human approval.
+
+## CCC-CTX-01 interim independent blockers — 2026-11-01
+
+Reviewer sw_61e66dd38dc049d6b02b64cda0681e75 independently passes 125/125 at 15dff13 but reproduces Codex old-measurement rescaling by window/task_started events (80/100 to 80/200 without new measurement, old window can yield 160%); old compaction replacing/invalidating newer readings in both providers; ignored Claude child compact_boundary; negative Claude usage fields summing into plausible known occupancy. Browser/SSE checks and exact PR evidence still in progress.
+
+Mid assigned fixes and store-ingestion regression cases: preserve pinned measurement separately from mutable turn hints, monotonic compaction and usage guards for parent/child, validate every numeric usage component. Senior completion advice must account for these blockers and recheck corrected head. No review/completion clearance or merge authorization.
