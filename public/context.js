@@ -24,7 +24,7 @@ export function contextView(c) {
       title: `Used tokens not reported; window ${num(c.window)}${src ? ` (${src})` : ''}. ${note}` };
   }
   if (c.window == null || c.pct == null) {
-    return { label: `ctx ${tokens(c.tokens)}`, short: `${tokens(c.tokens)} tokens · window unknown`, level: 'unknown', bar: null, over: false,
+    return { label: `ctx ${tokens(c.tokens)} · no window`, short: `${tokens(c.tokens)} tokens · window unknown`, level: 'unknown', bar: null, over: false,
       title: `${num(c.tokens)} tokens in the last request${model}${when}; window unknown. ${note}` };
   }
   const over = c.tokens > c.window;
@@ -36,4 +36,15 @@ export function contextView(c) {
     level, over, bar: Math.min(100, c.pct),
     title: `${num(c.tokens)} of ${num(c.window)} tokens used (${c.pct}%${over ? ', over limit' : `, ${left}% remaining`})${model}${when}${src ? `; ${src}` : ''}. ${note}`,
   };
+}
+
+/** Attributes giving a context element the full description for hover and assistive tech. */
+export function contextAttrs(v) {
+  return { title: v.title, 'aria-label': `Context ${v.short}. ${v.title}` };
+}
+
+/** A subagent row's label: its own reading, or an explicit "context unavailable". */
+export function childContextView(c) {
+  const v = contextView(c);
+  return !c || (c.tokens == null && c.window == null && !c.stale) ? { ...v, label: 'context unavailable', short: 'unavailable' } : v;
 }

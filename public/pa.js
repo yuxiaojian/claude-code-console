@@ -1,7 +1,7 @@
 // PA screen: one folder's sessions on the left, the selected session on the right.
 import { CODEX_MODES, MODES, POLICY_NOTE, SPEND_NOTE, STATUS, ago, api, codexModeLabel, dot, editable, h, home, incompleteMark, modeLabel, money, paHref, providerName, render, select, sessionName, shortModel, state, usd } from './core.js';
 import { chatBox } from './chat.js';
-import { contextView } from './context.js';
+import { contextAttrs, contextView } from './context.js';
 import { costTitle, sessionPane } from './session.js';
 
 const URGENCY = ['approval', 'question', 'error', 'waiting', 'tool', 'working', 'stale', 'idle', 'ended'];
@@ -114,7 +114,7 @@ function sessionList(p, sessions, selected) {
         h('span', { class: 'meta' },
           s.provider === 'codex' ? h('span', { class: 'badge provider' }, providerName(s.provider)) : null,
           h('span', { title: costTitle(s.cost) }, money(s.cost)),
-          h('span', { class: `ctx-cell ctx-${contextView(s.context).level}`, title: contextView(s.context).title, 'aria-label': `Context: ${contextView(s.context).short}` }, contextView(s.context).label),
+          h('span', { class: `ctx-cell ctx-${contextView(s.context).level}`, ...contextAttrs(contextView(s.context)) }, contextView(s.context).label),
           h('span', null, ago(s.lastActivity)),
         ),
         s.gitBranch && s.gitBranch !== 'HEAD' ? h('span', { class: 'branch small' }, s.gitBranch) : null,

@@ -1,6 +1,6 @@
 // The session pane on the PA screen: status, activity, cost and the event log.
 import { chatBox } from './chat.js';
-import { contextView } from './context.js';
+import { childContextView, contextAttrs, contextView } from './context.js';
 import { conversation } from './conversation.js';
 import { NEEDS, POLICY_NOTE, ago, api, clock, h, home, money, now, providerName, render, sessionName, shortModel, state, statusPill, tokens, usd } from './core.js';
 
@@ -77,7 +77,7 @@ function metrics(s) {
 
 function contextBar(s) {
   const v = contextView(s.context);
-  return h('div', { class: `ctx${v.bar == null ? ' quiet' : ''}`, title: v.title, 'aria-label': `Context: ${v.short}. ${v.title}` },
+  return h('div', { class: `ctx${v.bar == null ? ' quiet' : ''}`, ...contextAttrs(v) },
     h('span', null, 'Context'),
     v.bar == null ? null : h('div', { class: 'bar' }, h('div', { class: v.level === 'high' ? 'high' : v.level === 'mid' ? 'mid' : '', style: `width:${v.bar}%` })),
     h('span', null, v.short),
@@ -94,7 +94,7 @@ function subagents(s) {
       h('span', { class: `dot ${a.status}` }),
       h('span', { class: 'd' }, a.type && a.type !== 'general-purpose' ? `${a.type}: ` : '', a.description || a.id),
       a.status === 'running' && a.tool ? h('span', { class: 't' }, a.tool) : null,
-      h('span', { class: `t ctx-${contextView(a.context).level}`, title: contextView(a.context).title, 'aria-label': `Context: ${contextView(a.context).short}` }, contextView(a.context).label),
+      h('span', { class: `t ctx-${childContextView(a.context).level}`, ...contextAttrs(childContextView(a.context)) }, childContextView(a.context).label),
       h('span', { class: 't' }, `${tokens(a.outputTokens)} out`),
     )),
   );
@@ -212,7 +212,7 @@ function liveLine(s) {
     statusPill(s),
     s.openIn ? h('span', { class: `badge where-${s.openIn === 'console' ? 'console' : 'terminal'}`, title: OPEN_TITLES[s.openIn] }, OPEN_LABELS[s.openIn]) : null,
     activity(s) || (NEEDS.has(s.status) && s.summary ? h('span', { class: 'quiet clip', title: s.summary }, s.summary) : null),
-    h('span', { class: 'quiet push', title: costTitle(s.cost) }, money(s.cost), ` · ${contextView(s.context).label}`),
+    h('span', { class: 'quiet push', title: costTitle(s.cost) }, money(s.cost), ' · ', h('span', contextAttrs(contextView(s.context)), contextView(s.context).label)),
   );
 }
 
