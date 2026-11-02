@@ -188,3 +188,9 @@ Admin approved the recommendation; no additional implementation approval require
 PR #8 submitted b5b6bf37d0b787ab57426efae437938e3396f7e3, built on69e4d41 without history rewrite. Mid reports141/141 after replacing obsolete turn-pairing tests; browser unperformed. Claimed: all context-only turn inference/caches removed, native lifecycle status/cost/display retained, same-record count/window with null model, explicit partial unknowns, no cross-record backfill, replay/compaction/child isolation and README/formatter model-not-reported descriptions.
 
 Reviewer-first independent ingestion/suite/browser-SSE requested, including prior failed9377 sequences proving irrelevant under revised scope. Senior completion follows reviewer result. Developer keeps head stable; no current-head clearance, merge/deploy/release authorization.
+
+## CCC-CTX-01 same-record QA and partial lifecycle blocker — 2026-11-01
+
+Reviewer sw_7e8038088229452c826b40e34efa2a45 independently passes141/141 atb5b6bf3,6000-event prior turn/replay/eviction immunity, synthetic browser/SSE, children/parent isolation and full Codex model-not-reported text. Evidence: https://github.com/yuxiaojian/claude-code-console/pull/8#issuecomment-6567452955. Context-only inference/caches removed as approved.
+
+Gate remains open: window-only@5 limit100 then windowless count@10 then compact@15 resurrects retained partial limit despite measurement's unknown window. Partial summaries lose own timestamp and omit model-not-reported/as-of accessible descriptions. Senior bounded lifecycle/provenance advice requested; mid holds code pending response. Fix must remain same-record-only, consume/invalidate stale partial evidence and preserve its own provenance, with exact regression. No new turn inference, scope change, completion or merge authorization.

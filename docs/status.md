@@ -8,7 +8,7 @@ Goal: show last-reported context in session list, Details/live line and existing
 
 Current scope: Admin approved same-record-only Codex context in sw_594d8635e3a80f8126a6b34c6f85b5be, replying to decision sw_ddb10d2ee97644578f6e28ae3c34c5ff. Remove turn inference entirely; tokens/window come only from the same token_count. Codex context model is not reported. Claude uses native same-message evidence; accepted UI and compaction/replay guards remain.
 
-Status: same-record revised implementation ready-for-review at PR #8 head b5b6bf37d0b787ab57426efae437938e3396f7e3, feat/context-status, built atop69e4d41 without rewrite. Developer141/141, browser unperformed. Reviewer-first QA pending; senior completion follows. Old turn-inference implementation failed independent QA; no old clearance applies to the revised scope.
+Status: same-record revised implementation ready-for-review at PR #8 head b5b6bf37d0b787ab57426efae437938e3396f7e3, feat/context-status, built atop69e4d41 without rewrite. Independent141/141,6000-event association immunity and browser/SSE/child checks pass. BLOCKED on partial-limit resurrection after measurement/compaction and lost partial observation provenance/accessibility. Senior bounded advice pending; mid holds before patch. Old turn-inference implementation failed independent QA; no old clearance applies to the revised scope.
 
 Owners and gates:
 - eng-pm: scope, task state/wiki, PR #7 docs/context-status-plan; resolve blockers and human decisions.
