@@ -8,7 +8,7 @@ Goal: show last-reported context in session list, Details/live line and existing
 
 Current scope: Admin approved same-record-only Codex context in sw_594d8635e3a80f8126a6b34c6f85b5be, replying to decision sw_ddb10d2ee97644578f6e28ae3c34c5ff. Remove turn inference entirely; tokens/window come only from the same token_count. Codex context model is not reported. Claude uses native same-message evidence; accepted UI and compaction/replay guards remain.
 
-Status: revised implementation authorized after senior pre-plan advice sw_88a5136516584e8bab5d927e83ed71bd. Mid resumes on existing PR #8, feat/context-status, last submitted69e4d41 (unreviewed). Old turn-inference implementation failed independent QA; no old clearance applies to the revised scope.
+Status: same-record revised implementation ready-for-review at PR #8 head b5b6bf37d0b787ab57426efae437938e3396f7e3, feat/context-status, built atop69e4d41 without rewrite. Developer141/141, browser unperformed. Reviewer-first QA pending; senior completion follows. Old turn-inference implementation failed independent QA; no old clearance applies to the revised scope.
 
 Owners and gates:
 - eng-pm: scope, task state/wiki, PR #7 docs/context-status-plan; resolve blockers and human decisions.
@@ -19,7 +19,7 @@ Owners and gates:
 
 Verification: last independently tested9377a3f had148/148 and original four repros pass, but eviction/late-start/fallback misassociation failed.69e4d41 has150 developer tests only, preserved unreviewed. Presentation/browser/SSE passes atb42e1ca are historical, not revised-scope clearance. Earlier count discrepancy resolved:018fa5b=140,5742f8e=143.
 
-Next: implement same-record-only rules and ingestion regressions; reviewer checks first, then senior completion advice; only after both clear request human merge approval. No merge/deploy/release authorized.
+Next: reviewer independently checks exact head, same-record ingestion regressions and browser/SSE model-not-reported; then senior completion advice; only after both clear request human merge approval. No merge/deploy/release authorized.
 
 ## Other project state (last verified, do not duplicate assignments)
 

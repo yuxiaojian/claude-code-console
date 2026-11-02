@@ -182,3 +182,9 @@ Mid submitted69e4d41e00867a6605a7eca4b8b4ea514d453713 with150 developer tests (s
 ### CCC-CTX-01 resumed after human scope decision
 
 Admin approved the recommendation; no additional implementation approval required. Mid may implement bounded revised scope on existing PR #8, state chosen base in PR. Senior revised pre-plan checkpoint received; independent QA and senior completion remain pending. Merge/deployment/release still require separate approval.
+
+## CCC-CTX-01 same-record implementation submitted — 2026-11-01
+
+PR #8 submitted b5b6bf37d0b787ab57426efae437938e3396f7e3, built on69e4d41 without history rewrite. Mid reports141/141 after replacing obsolete turn-pairing tests; browser unperformed. Claimed: all context-only turn inference/caches removed, native lifecycle status/cost/display retained, same-record count/window with null model, explicit partial unknowns, no cross-record backfill, replay/compaction/child isolation and README/formatter model-not-reported descriptions.
+
+Reviewer-first independent ingestion/suite/browser-SSE requested, including prior failed9377 sequences proving irrelevant under revised scope. Senior completion follows reviewer result. Developer keeps head stable; no current-head clearance, merge/deploy/release authorization.
