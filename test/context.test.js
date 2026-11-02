@@ -128,10 +128,10 @@ const cx = events => {
 const countEv = (sec, total, window, extra = {}) => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { total_tokens: total }, ...(window === undefined ? {} : { model_context_window: window }), ...extra } } });
 const compactedEv = sec => ({ timestamp: new Date(Date.now() - 60_000 + sec * 1000).toISOString(), type: 'event_msg', payload: { type: 'context_compacted' } });
 
-test('codex: no usage yet is unknown; a task_started window alone is not a measurement', () => {
+test('codex: no usage yet shows the open turn’s reported window with used unknown', () => {
   const { sum } = cx([meta(ids.a), turnContext(), started(), user('hi')]);
   const c = sum().context;
-  assert.equal(c.tokens, null); assert.equal(c.window, null); assert.equal(c.pct, null);
+  assert.equal(c.tokens, null); assert.equal(c.window, 400_000); assert.equal(c.pct, null); assert.equal(c.windowSource, 'reported');
 });
 
 test('codex: reading pinned to the turn model with the reported window', () => {
@@ -251,4 +251,80 @@ test('claude: a negative or non-numeric usage component makes the reading unknow
   st.ingest(asst(4, 'm4', { input_tokens: 5, cache_creation: { ephemeral_5m_input_tokens: -5 }, output_tokens: 5 }));
   const c = ctxOf(st);
   assert.equal(c.tokens, 10_000); assert.equal(c.at, T0 + 1000);
+});
+
+// ---------- identity-based pairing (senior sw_cc08f453) ----------
+const tsx = sec => new Date(Date.now() - 60_000 + sec * 1000).toISOString();
+const tstart = (sec, turn, window) => ({ timestamp: tsx(sec), type: 'event_msg', payload: { type: 'task_started', turn_id: turn, model_context_window: window } });
+const tctx = (sec, turn, model) => ({ timestamp: tsx(sec), type: 'turn_context', payload: { ...(turn ? { turn_id: turn } : {}), cwd: '/tmp/proj', model } });
+const tcount = (sec, total, window) => countEv(sec, total, window);
+
+test('(a) codex: a late-replayed old turn_context cannot retag a newer reading', () => {
+  const { sum } = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B'), tcount(12, 40_000), tctx(3, 'T1', 'A'), tcount(13, 80_000)]);
+  const c = sum().context;
+  assert.equal(c.model, 'B'); assert.equal(c.window, 400_000); assert.equal(c.pct, 20);
+});
+
+test('(b) claude: a rejected replayed opus line leaves compaction on haiku’s window', () => {
+  const st = mk();
+  st.ingest(asst(20, 'm1', { input_tokens: 40_000, output_tokens: 0 }, 'claude-haiku-4-5'));
+  st.ingest(asst(10, 'm0', { input_tokens: 5000, output_tokens: 0 }, 'claude-opus-5-5'));
+  st.ingest(compactEv(30, { postTokens: 20_000 }));
+  const c = ctxOf(st);
+  assert.equal(c.model, 'claude-haiku-4-5'); assert.equal(c.window, 200_000); assert.equal(c.pct, 10);
+});
+
+test('(c) claude main and child: a streamed line without a model keeps its message’s model; a new id stays unknown', () => {
+  const st = mk();
+  st.ingest(asst(1, 'm1', { input_tokens: 1000, output_tokens: 10 }, 'claude-sonnet-4-6'));
+  st.ingest(asst(2, 'm1', { input_tokens: 1000, output_tokens: 20 }, null));
+  let c = ctxOf(st);
+  assert.equal(c.model, 'claude-sonnet-4-6'); assert.equal(c.window, 1_000_000); assert.equal(c.tokens, 1020);
+  st.ingest(asst(3, 'm2', { input_tokens: 2000, output_tokens: 0 }, null));
+  c = ctxOf(st);
+  assert.equal(c.model, null); assert.equal(c.window, null); assert.equal(c.pct, null); assert.equal(c.tokens, 2000);
+  const sub = (sec, id, model, out) => ({ sessionId: SID, agentId: 'k', isSidechain: true, timestamp: at(sec), type: 'assistant', message: { id, ...(model ? { model } : {}), content: [{ type: 'text', text: 'x' }], usage: { input_tokens: 500, output_tokens: out } } });
+  st.ingest(sub(4, 'c1', 'claude-haiku-4-5', 1)); st.ingest(sub(5, 'c1', undefined, 2));
+  let k = st.summarize(st.sessions.get(SID)).subagents[0].context;
+  assert.equal(k.model, 'claude-haiku-4-5'); assert.equal(k.window, 200_000);
+  st.ingest(sub(6, 'c2', undefined, 3));
+  k = st.summarize(st.sessions.get(SID)).subagents[0].context;
+  assert.equal(k.window, null); assert.equal(k.model, null);
+});
+
+test('(d) codex: a window-only token_count before any count is not lost, and never alters a reading', () => {
+  let c = cx([meta(ids.a), tstart(1, 'T1'), tctx(2, 'T1', 'A'), ev(3, { type: 'token_count', info: { model_context_window: 128_000 } })]).sum().context;
+  assert.equal(c.tokens, null); assert.equal(c.window, 128_000); assert.equal(c.pct, null); assert.equal(c.windowSource, 'reported');
+  c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tcount(3, 50_000), ev(4, { type: 'token_count', info: { model_context_window: 999 } })]).sum().context;
+  assert.equal(c.window, 100_000); assert.equal(c.pct, 50);
+});
+
+test('(e) codex: A reading survives task_started(B) then turn_context(B); the next count pairs B with B', () => {
+  for (const order of ['start-first', 'ctx-first']) {
+    const head = [meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tcount(3, 50_000)];
+    const turn2 = order === 'start-first' ? [tstart(10, 'T2', 400_000), tctx(11, 'T2', 'B')] : [tctx(10, 'T2', 'B'), tstart(11, 'T2', 400_000)];
+    let c = cx([...head, ...turn2]).sum().context;
+    assert.equal(c.tokens, 50_000, order); assert.equal(c.model, 'A'); assert.equal(c.window, 100_000); assert.equal(c.pct, 50);
+    c = cx([...head, ...turn2, ev(12, { type: 'token_count', info: { last_token_usage: { total_tokens: 100_000 } } })]).sum().context;
+    assert.equal(c.model, 'B'); assert.equal(c.window, 400_000); assert.equal(c.pct, 25, order);
+  }
+});
+
+test('(e2) codex: turn_context without or with a mismatched turn_id never sets the reading model', () => {
+  for (const tc of [tctx(2, null, 'A'), tctx(2, 'OTHER', 'A')]) {
+    const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tc, tcount(3, 10_000)]).sum().context;
+    assert.equal(c.model, null); assert.equal(c.window, 100_000); assert.equal(c.tokens, 10_000);
+  }
+});
+
+test('(f) a model change without a new reading keeps the measured label', () => {
+  const c = cx([meta(ids.a), tstart(1, 'T1', 100_000), tctx(2, 'T1', 'A'), tcount(3, 50_000), tctx(9, 'T2', 'B')]).sum().context;
+  assert.equal(c.model, 'A');
+});
+
+test('claude: compaction with no prior reading shows postTokens with window unknown', () => {
+  const st = mk();
+  st.ingest(compactEv(5, { postTokens: 3000 }));
+  const c = ctxOf(st);
+  assert.equal(c.tokens, 3000); assert.equal(c.window, null); assert.equal(c.pct, null);
 });

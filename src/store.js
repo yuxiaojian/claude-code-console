@@ -106,6 +106,7 @@ function newSession(id) {
     compactedAt: null,       // messages Claude Code replays after compaction carry older timestamps
     ctx: newCtx(),           // last main-thread context measurement (see context.js)
     usageByModel: new Map(),
+    ctxModels: new Map(),    // message.id -> model, so a streamed line without a model keeps its message's model
     msgUsage: new Map(),     // message.id -> { model, usage } (cumulative per message)
     spendByDay: new Map(),   // dayKey -> estimated USD, for today / this-week totals
     reportedCost: null,
@@ -117,6 +118,22 @@ function newSession(id) {
     log: [],
     files: [],
   };
+}
+
+/**
+ * The model a usage line belongs to: its own, else the one recorded for the same message.id
+ * (streamed lines of one response share an id), else unknown. Never the session's current model.
+ */
+function messageModel(known, msg) {
+  if (msg.model && msg.model !== '<synthetic>') {
+    if (msg.id) {
+      known.delete(msg.id);
+      known.set(msg.id, msg.model);
+      if (known.size > MSG_USAGE_LIMIT) known.delete(known.keys().next().value);
+    }
+    return msg.model;
+  }
+  return (msg.id && known.get(msg.id)) || null;
 }
 
 /** Tokens in one request (input + cache + output), or null when the usage block carries no token counts. */
@@ -266,8 +283,8 @@ export class Store {
         if (ts) s.compactedAt = ts;
         const post = e.compactMetadata?.postTokens;
         const known = Number.isFinite(post) && post >= 0;
-        const window = contextWindow(s.model);
-        compact(s.ctx, { postTokens: post, model: s.model, window, windowSource: window ? 'model-table' : null, ts });
+        const window = contextWindow(s.ctx.model);
+        compact(s.ctx, { postTokens: post, model: s.ctx.model, window, windowSource: window ? 'model-table' : null, ts });
         this.#log(s, ts, 'info', `Compacted${known ? ` → ${post.toLocaleString('en-US')} tokens` : ''}`);
         return;
       }
@@ -371,8 +388,9 @@ export class Store {
     if (msg.model) s.model = msg.model;
     const tokens = requestTokens(msg.usage);
     if (tokens != null) {
-      const window = contextWindow(msg.model);
-      measure(s.ctx, { tokens, model: msg.model || s.model, window, windowSource: window ? 'model-table' : null, ts }, s.compactedAt);
+      const model = messageModel(s.ctxModels, msg);
+      const window = contextWindow(model);
+      measure(s.ctx, { tokens, model, window, windowSource: window ? 'model-table' : null, ts }, s.compactedAt);
     }
     s.error = null;
 
@@ -415,7 +433,7 @@ export class Store {
         lastActivity: null,
         outputTokens: 0,
         ctx: newCtx(),
-        model: null,             // this subagent's latest model
+        ctxModels: new Map(),
         tool: '',
       };
       // Claude Code writes agent-<id>.meta.json next to agent-<id>.jsonl.
@@ -437,8 +455,8 @@ export class Store {
   #subSystem(s, e, ts, filePath) {
     if (e.subtype !== 'compact_boundary') return;
     const sub = this.#subagent(s, e, filePath);
-    const window = contextWindow(sub.model);
-    compact(sub.ctx, { postTokens: e.compactMetadata?.postTokens, model: sub.model, window, windowSource: window ? 'model-table' : null, ts });
+    const window = contextWindow(sub.ctx.model);
+    compact(sub.ctx, { postTokens: e.compactMetadata?.postTokens, model: sub.ctx.model, window, windowSource: window ? 'model-table' : null, ts });
   }
 
   #subTouch(sub, ts) {
@@ -461,11 +479,11 @@ export class Store {
     this.#subTouch(sub, ts);
     sub.outputTokens += outDelta;
     const msg = e.message || {};
-    if (msg.model && msg.model !== '<synthetic>') sub.model = msg.model;
     const tokens = msg.model === '<synthetic>' ? null : requestTokens(msg.usage);
     if (tokens != null) {
-      const window = contextWindow(msg.model);
-      measure(sub.ctx, { tokens, model: msg.model || null, window, windowSource: window ? 'model-table' : null, ts });
+      const model = messageModel(sub.ctxModels, msg);
+      const window = contextWindow(model);
+      measure(sub.ctx, { tokens, model, window, windowSource: window ? 'model-table' : null, ts });
     }
     for (const b of Array.isArray(msg.content) ? msg.content : []) {
       if (b?.type === 'tool_use') {
