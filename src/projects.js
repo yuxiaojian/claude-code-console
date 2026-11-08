@@ -62,12 +62,28 @@ export class Config {
   constructor(file = null) {
     this.file = file;
     this.pas = {};
+    this.claude = { dirs: [], active: '' }; // Claude config dirs the user added, and the one last watched
     if (!file || !fs.existsSync(file)) return;
     let data;
     try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) {
       throw new Error(`Can't read ${file}: ${err.message}. Fix or delete it.`);
     }
     if (data?.pas && typeof data.pas === 'object') this.pas = data.pas;
+    if (data?.claude && typeof data.claude === 'object') {
+      const dirs = Array.isArray(data.claude.dirs) ? data.claude.dirs.filter(d => typeof d === 'string' && path.isAbsolute(d)) : [];
+      this.claude = { dirs, active: typeof data.claude.active === 'string' ? data.claude.active : '' };
+    }
+  }
+
+  /** Claude config dirs the user added (the default ~/.claude isn't stored). */
+  claudeDirs() { return [...this.claude.dirs]; }
+
+  /** The config dir watched last, or ''. */
+  activeClaudeDir() { return this.claude.active; }
+
+  setClaude({ dirs, active }) {
+    this.claude = { dirs: [...dirs], active: active || '' };
+    this.#save();
   }
 
   get(root) { return this.pas[root] || {}; }
@@ -95,7 +111,7 @@ export class Config {
     if (!this.file) return;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ version: 1, pas: this.pas }, null, 2) + '\n');
+    fs.writeFileSync(tmp, JSON.stringify({ version: 1, pas: this.pas, ...(this.claude.dirs.length || this.claude.active ? { claude: this.claude } : {}) }, null, 2) + '\n');
     fs.renameSync(tmp, this.file);
   }
 }

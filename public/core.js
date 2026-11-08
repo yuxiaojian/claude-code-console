@@ -21,6 +21,7 @@ export const state = {
   totals: null,
   runs: [],                 // Claude Code and Codex processes the console started
   chat: false,              // the server can run sessions for at least one provider
+  claudeDirs: null,         // { fixed, switching, active, dirs: [{ dir, isDefault, active, exists }] }
   providers: { claude: { chat: false }, codex: { chat: false, installed: false } },
   newProvider: localStorage.getItem('ccc.provider') || 'claude', // provider picked for new sessions
   pending: null,            // { key, pa, from? }: a new or forked session we'll open once it appears

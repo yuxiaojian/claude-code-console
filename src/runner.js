@@ -35,6 +35,15 @@ export class Runner extends EventEmitter {
     this.query = query;
     this.idleMs = idleMs;
     this.runs = new Map(); // key -> run
+    this.configDir = null; // CLAUDE_CONFIG_DIR for new processes; null leaves Claude Code's default
+  }
+
+  /** The environment for a new process: the console's own, pointed at the active config dir. */
+  #env() {
+    const env = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'claude-code-console/0.1' };
+    if (this.configDir) env.CLAUDE_CONFIG_DIR = this.configDir;
+    else delete env.CLAUDE_CONFIG_DIR;
+    return env;
   }
 
   #changed() { this.emit('change'); }
@@ -64,6 +73,7 @@ export class Runner extends EventEmitter {
       sessionId: fork ? null : resume,
       forkedFrom: fork ? resume : null,
       cwd,
+      configDir: this.configDir,
       mode: permissionMode,
       model,
       state: 'starting',   // starting | running | idle | closed
@@ -93,7 +103,7 @@ export class Runner extends EventEmitter {
         permissionMode,
         ...(model ? { model } : {}),
         canUseTool: (tool, toolInput, opts) => this.#ask(run, tool, toolInput, opts),
-        env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'claude-code-console/0.1' },
+        env: this.#env(),
       },
     });
     this.#push(run, prompt);

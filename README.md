@@ -37,13 +37,22 @@ Options:
   -p, --port <n>   Port to listen on (default 3001, or $PORT)
       --host <h>   Interface to bind (default 127.0.0.1)
   -d, --days <n>   Load sessions active in the last n days (default 7)
-      --dir <path> Transcript directory (default ~/.claude/projects, honours $CLAUDE_CONFIG_DIR)
+      --dir <path> Transcript directory, fixed (default <config dir>/projects; see
+                   Claude config dirs below)
       --codex-dir <path>
                    Codex CLI sessions (default ~/.codex/sessions, honours $CODEX_HOME)
       --config <f> Where PA names, pins, defaults and added folders are saved
                    (default ~/.claude-code-console/config.json; the access
                    token is kept next to it)
 ```
+
+### Claude config dirs
+
+If you run more than one Claude Code account, for example `CLAUDE_CONFIG_DIR="$HOME/.claude-personal" claude`, use the **Claude** picker in the top bar to choose which config dir the console watches.
+- **Adding:** pick *+ Add config dir…* and enter the folder (`~/.claude-personal`). `~/.claude` is always listed.
+- **Switching:** the console loads that dir's sessions (`<dir>/projects`) and terminal processes (`<dir>/sessions`). Sessions it starts, resumes or forks run with `CLAUDE_CONFIG_DIR` set to that dir, so they use that account's login and settings. For `~/.claude` the variable is unset. A switch ends any Claude sessions the console is running, after asking you first. Codex sessions are not affected.
+- **At startup:** `$CLAUDE_CONFIG_DIR` wins if it's set, otherwise the dir you picked last. `--dir` fixes the transcript dir and turns the picker off.
+- **Shared:** PA names, pins and defaults belong to folders, so every config dir shares them. The list of dirs is saved in `config.json`.
 
 ## How it works
 
