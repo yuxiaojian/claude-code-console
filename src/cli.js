@@ -13,8 +13,8 @@ import { Runner, loadQuery } from './runner.js';
 import { CodexStore } from './codex/store.js';
 import { CodexRunner, detectCodex } from './codex/runner.js';
 import { CodexLive } from './codex/live.js';
+import { ClaudeProfiles, DEFAULT_CLAUDE_DIR, envFor, normalizeDir } from './profiles.js';
 
-function claudeDir() { return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'); }
 function codexHome() { return process.env.CODEX_HOME || path.join(os.homedir(), '.codex'); }
 
 const { values: opts } = parseArgs({
@@ -22,7 +22,7 @@ const { values: opts } = parseArgs({
     port: { type: 'string', short: 'p', default: process.env.PORT || '3001' },
     host: { type: 'string', default: process.env.HOST || '127.0.0.1' },
     days: { type: 'string', short: 'd', default: '7' },
-    dir: { type: 'string', default: path.join(claudeDir(), 'projects') },
+    dir: { type: 'string' },
     'codex-dir': { type: 'string', default: path.join(codexHome(), 'sessions') },
     config: { type: 'string', default: path.join(os.homedir(), '.claude-code-console', 'config.json') },
     help: { type: 'boolean', short: 'h' },
@@ -38,7 +38,9 @@ Usage: claude-code-console [options]
       --host <h>   Interface to bind (default 127.0.0.1). Anyone who can reach it and
                    has the access token can run Claude Code on this machine.
   -d, --days <n>   Load sessions active in the last n days (default 7)
-      --dir <path> Transcript directory (default ~/.claude/projects)
+      --dir <path> Transcript directory, fixed (default: <config dir>/projects, where the
+                   config dir is $CLAUDE_CONFIG_DIR, else the one last picked in
+                   the browser, else ~/.claude)
       --codex-dir <path>
                    Codex CLI sessions (default ~/.codex/sessions, honours $CODEX_HOME)
       --config <f> Where PA names, pins and added folders are saved
@@ -79,11 +81,34 @@ try { config = new Config(opts.config); } catch (err) {
   console.error(err.message);
   process.exit(1);
 }
-const store = new Store();
-const watcher = new TranscriptWatcher({
-  root: opts.dir,
-  sinceMs: Date.now() - windowMs,
-  onLine: (line, file) => store.ingestLine(line, file),
+const query = await loadQuery();
+if (!query) console.warn('Claude Agent SDK not found: chat is off. Run npm install to enable it.');
+const runner = new Runner({ query });
+
+// The Claude config dir: $CLAUDE_CONFIG_DIR wins, then the one picked last in the browser.
+const isDir = p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+const saved = config.activeClaudeDir();
+const initialDir = process.env.CLAUDE_CONFIG_DIR ? normalizeDir(process.env.CLAUDE_CONFIG_DIR)
+  : saved && isDir(saved) ? saved : DEFAULT_CLAUDE_DIR;
+/** Store, watcher and running-process records for one config dir, loaded and watching. */
+async function openClaude(dir) {
+  const store = new Store();
+  const watcher = new TranscriptWatcher({
+    root: opts.dir || path.join(dir, 'projects'),
+    sinceMs: Date.now() - windowMs,
+    onLine: (line, file) => store.ingestLine(line, file),
+  });
+  await watcher.start();
+  return { store, watcher, live: new LiveSessions(path.join(dir, 'sessions')) };
+}
+const profiles = new ClaudeProfiles({
+  config,
+  initial: initialDir,
+  fixed: Boolean(opts.dir),
+  open: openClaude,
+  close: ctx => ctx?.watcher.stop(),
+  // Chat processes belong to the account they started under, so a switch ends them.
+  onSwitch: dir => { runner.closeAll(); runner.configDir = envFor(dir); },
 });
 
 const codexStore = new CodexStore();
@@ -95,25 +120,21 @@ const codexWatcher = new TranscriptWatcher({
 });
 
 const t0 = Date.now();
-await watcher.start();
+const { store, watcher, live } = await profiles.init();
 await codexWatcher.start();
 const codexCount = codexStore.snapshot().length;
-console.log(`Loaded ${store.sessions.size} Claude Code${codexCount ? ` and ${codexCount} Codex` : ''} sessions from the last ${days} day(s) in ${Date.now() - t0} ms (${opts.dir})`);
+console.log(`Loaded ${store.sessions.size} Claude Code${codexCount ? ` and ${codexCount} Codex` : ''} sessions from the last ${days} day(s) in ${Date.now() - t0} ms (${watcher.root})`);
 
 // Long-running consoles shouldn't grow forever.
-setInterval(() => { store.prune(Date.now() - windowMs); codexStore.prune(Date.now() - windowMs); clearRootCache(); }, 10 * 60_000).unref();
+setInterval(() => { profiles.current.store.prune(Date.now() - windowMs); codexStore.prune(Date.now() - windowMs); clearRootCache(); }, 10 * 60_000).unref();
 
 const allowRemote = !['127.0.0.1', 'localhost', '::1'].includes(opts.host);
-const query = await loadQuery();
-if (!query) console.warn('Claude Agent SDK not found: chat is off. Run npm install to enable it.');
-const runner = new Runner({ query });
-const live = new LiveSessions(path.join(claudeDir(), 'sessions'));
 const codexInfo = await detectCodex();
 if (codexInfo.installed && !codexInfo.chat) console.warn(`Codex CLI ${codexInfo.version || '(unknown version)'}: ${codexInfo.reason}`);
 const codexRunner = new CodexRunner({ available: codexInfo });
 const codexLive = new CodexLive({ dir: path.join(codexHome(), 'thread-writer-locks'), ownPids: () => codexRunner.ownPids() });
 const codex = { store: codexStore, watcher: codexWatcher, runner: codexRunner, live: codexLive, info: codexInfo };
-const server = createServer({ store, watcher, config, days, allowRemote, token, runner, live, codex });
+const server = createServer({ store, watcher, config, days, allowRemote, token, runner, live, codex, profiles });
 server.on('error', err => {
   if (err.code === 'EADDRINUSE') console.error(`Port ${port} is already in use. Try --port ${port + 1}.`);
   else console.error(err);
@@ -127,5 +148,5 @@ server.listen(port, opts.host, () => {
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => { runner.closeAll(); codexRunner.closeAll(); watcher.stop(); codexWatcher.stop(); server.close(); process.exit(0); });
+  process.on(sig, () => { runner.closeAll(); codexRunner.closeAll(); profiles.current.watcher.stop(); codexWatcher.stop(); server.close(); process.exit(0); });
 }

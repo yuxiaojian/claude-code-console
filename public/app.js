@@ -1,6 +1,6 @@
 // Claude Code Console — browser side. No framework: the server pushes a full
 // snapshot over SSE and we re-render the current screen.
-import { NEEDS, api, dot, flushMounted, h, onRender, paHref, route, state } from './core.js';
+import { NEEDS, api, dot, flushMounted, h, home, onRender, paHref, route, select, state } from './core.js';
 import { followPending } from './chat.js';
 import { overview } from './overview.js';
 import { paView } from './pa.js';
@@ -54,6 +54,65 @@ function sidebar(r) {
   );
 }
 
+// ---------- Claude config dir ----------
+const ADD = '__add__';
+const claudeDirBox = document.getElementById('claudeDir');
+
+async function changeClaudeDir(value) {
+  const info = state.claudeDirs;
+  try {
+    if (value === ADD) {
+      const dir = prompt('Claude config dir to add (what you would set as CLAUDE_CONFIG_DIR):', '~/.claude-');
+      if (!dir?.trim()) return;
+      await api('POST', '/api/claude-dirs', { path: dir });
+      if (confirm(`Switch to ${dir.trim()} now?`)) await switchClaudeDir(dir.trim());
+    } else if (value.startsWith('remove:')) {
+      const dir = value.slice(7);
+      if (confirm(`Remove ${home(dir)} from the list? Nothing on disk is deleted.`)) await api('POST', '/api/claude-dirs/remove', { path: dir });
+    } else if (value !== info?.active) {
+      await switchClaudeDir(value);
+    }
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    renderClaudeDir();
+  }
+}
+
+async function switchClaudeDir(dir) {
+  const live = state.runs.filter(r => r.provider === 'claude' && r.state !== 'closed').length;
+  if (live && !confirm(`Switching ends the ${live} Claude session${live > 1 ? 's' : ''} the console is running. Continue?`)) return;
+  claudeDirBox.classList.add('busy');
+  try {
+    await api('POST', '/api/claude-dirs/select', { path: dir });
+    state.details.clear();
+    if (route().view === 'pa') location.hash = '#/';
+  } finally {
+    claudeDirBox.classList.remove('busy');
+  }
+}
+
+/** The picker for which Claude config dir ($CLAUDE_CONFIG_DIR) the console watches. */
+function renderClaudeDir() {
+  const info = state.claudeDirs;
+  if (!info) { claudeDirBox.replaceChildren(); return; }
+  if (state.editing && claudeDirBox.contains(document.activeElement)) return;
+  const label = d => `${home(d.dir)}${d.isDefault ? ' (default)' : ''}${d.exists ? '' : ' (missing)'}`;
+  const options = info.dirs.map(d => [d.dir, label(d)]);
+  if (!info.fixed) {
+    options.push([ADD, '+ Add config dir…']);
+    for (const d of info.dirs) if (!d.isDefault && !d.active) options.push([`remove:${d.dir}`, `− Remove ${home(d.dir)}`]);
+  }
+  const el = select(options, info.active, changeClaudeDir, {
+    title: info.fixed ? 'Fixed by --dir at startup' : info.switching ? 'Switching…'
+      : 'Claude config dir (CLAUDE_CONFIG_DIR) to watch. Sessions started here use it too.',
+    'aria-label': 'Claude config dir',
+    disabled: info.fixed || info.switching,
+  });
+  claudeDirBox.replaceChildren(h('span', { class: 'cfgdir-label' }, 'Claude'), el);
+  claudeDirBox.classList.toggle('busy', Boolean(info.switching));
+}
+
 // ---------- render ----------
 /** Text the user is selecting in an element marked data-hold-selection (the session ID): re-rendering would drop it. */
 function holdingSelection() {
@@ -84,6 +143,7 @@ function render() {
   document.getElementById('filter').placeholder = r.view === 'pa' ? 'Filter sessions…' : 'Filter assistants…';
 
   sidebar(r);
+  renderClaudeDir();
   if (r.view === 'pa') paView(main, r); else overview(main);
   flushMounted();
   if (active?.isConnected && document.activeElement !== active) {
@@ -172,6 +232,7 @@ function connect() {
     state.runs = msg.runs || [];
     state.chat = Boolean(msg.chat);
     if (msg.providers) state.providers = msg.providers;
+    state.claudeDirs = msg.claudeDirs || null;
     notifyTransitions(msg.sessions, state.runs);
     render();
   };

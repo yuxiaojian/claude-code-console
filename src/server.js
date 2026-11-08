@@ -73,9 +73,11 @@ const rekey = (run, provider) => ({ ...run, provider, sessionId: sessionKey(prov
 /**
  * `token` guards every API call (pass null only in tests). `runner` and `live` enable Claude
  * chat; `codex` ({ store, watcher, runner, live, info }) adds Codex sessions. Without a
- * runner a provider is read-only.
+ * runner a provider is read-only. `profiles` (a ClaudeProfiles) lets the browser switch which
+ * Claude config dir is watched; it swaps `store`, `watcher` and `live` when it does.
  */
-export function createServer({ store, watcher, config = new Config(), days = 7, allowRemote = false, token = null, runner = null, live = null, codex = null }) {
+export function createServer({ store, watcher, config = new Config(), days = 7, allowRemote = false, token = null, runner = null, live = null, codex = null, profiles = null }) {
+  const claude = { store, watcher, live };
   const clients = new Set();
   let lastSent = -1;
   let otherVersion = 0;  // config and run changes alter the view without a transcript event
@@ -92,7 +94,7 @@ export function createServer({ store, watcher, config = new Config(), days = 7, 
 
   /** Summaries of every shown session, keyed by provider. */
   const snapshot = (now = Date.now()) => {
-    const out = store.snapshot(now).map(s => ({ ...s, id: sessionKey('claude', s.id), nativeId: s.id, provider: 'claude', forkedFrom: sessionKey('claude', s.forkedFrom) }));
+    const out = claude.store.snapshot(now).map(s => ({ ...s, id: sessionKey('claude', s.id), nativeId: s.id, provider: 'claude', forkedFrom: sessionKey('claude', s.forkedFrom) }));
     for (const s of codex?.store.snapshot(now) || []) out.push({ ...s, id: sessionKey('codex', s.id), nativeId: s.id, forkedFrom: sessionKey('codex', s.forkedFrom) });
     return out;
   };
@@ -105,14 +107,14 @@ export function createServer({ store, watcher, config = new Config(), days = 7, 
       const s = codex?.store.get(k.id);
       return s ? { ...k, s, summary: () => codex.store.summarize(s) } : null;
     }
-    const s = store.sessions.get(k.id);
-    return s ? { ...k, s, summary: () => store.summarize(s) } : null;
+    const s = claude.store.sessions.get(k.id);
+    return s ? { ...k, s, summary: () => claude.store.summarize(s) } : null;
   };
 
   /** Overlay what only the console knows: approvals it's holding, sessions open elsewhere. */
   const annotate = sessions => {
     const owned = runner?.ownedSessions() || new Set();
-    const terminal = live?.current() || new Map();
+    const terminal = claude.live?.current() || new Map();
     const elsewhere = codex?.live?.current() || new Map();
     for (const s of sessions) {
       if (s.provider === 'codex') {
@@ -141,25 +143,34 @@ export function createServer({ store, watcher, config = new Config(), days = 7, 
     const { projects, totals } = buildProjects(sessions, config, { now, days });
     const runs = [...(runner?.snapshot() || []).map(r => rekey(r, 'claude')), ...(codexRunner?.snapshot() || []).map(r => rekey(r, 'codex'))];
     const p = providers();
-    return { now, totals, projects, sessions: sessions.map(listItem), runs, chat: p.claude.chat || p.codex.chat, providers: p };
+    return { now, totals, projects, sessions: sessions.map(listItem), runs, chat: p.claude.chat || p.codex.chat, providers: p, claudeDirs: claudeDirs() };
   };
+  const claudeDirs = () => profiles?.list() || null;
   const payload = () => JSON.stringify(view());
   const findProject = id => buildProjects(snapshot(), config, { days }).projects.find(p => p.id === id);
 
   const broadcast = (force = false) => {
-    const version = store.version + (codex?.store.version || 0) + otherVersion;
+    const version = claude.store.version + (codex?.store.version || 0) + otherVersion;
     if (!clients.size || (!force && version === lastSent)) return;
     lastSent = version;
     const data = `data: ${payload()}\n\n`;
     for (const res of clients) res.write(data);
   };
 
-  for (const w of [watcher, codex?.watcher].filter(Boolean)) {
-    w.on('change', () => {
-      if (timer) return;
-      timer = setTimeout(() => { timer = null; broadcast(); }, THROTTLE_MS);
-    });
-  }
+  const onWatch = () => {
+    if (timer) return;
+    timer = setTimeout(() => { timer = null; broadcast(); }, THROTTLE_MS);
+  };
+  for (const w of [watcher, codex?.watcher].filter(Boolean)) w.on('change', onWatch);
+  // Another config dir: follow its store and watcher, and push the new view right away.
+  profiles?.on('switch', next => {
+    claude.watcher?.off('change', onWatch);
+    Object.assign(claude, { store: next.store, watcher: next.watcher, live: next.live });
+    claude.watcher?.on('change', onWatch);
+    otherVersion++;
+    broadcast(true);
+  });
+  profiles?.on('change', () => { otherVersion++; broadcast(true); });
   const bump = () => {
     otherVersion++;
     if (timer) return;
@@ -277,6 +288,23 @@ export function createServer({ store, watcher, config = new Config(), days = 7, 
       } catch (err) {
         return json(res, 409, { error: provider === 'codex' && !(err instanceof CodexError) && !/^(Unknown Codex policy|Already running|That run has ended)/.test(err.message) ? 'Codex request failed' : err.message });
       }
+    }
+
+    if (req.method === 'POST' && /^\/api\/claude-dirs(\/select|\/remove)?$/.test(url.pathname)) {
+      if (!profiles) return json(res, 501, { error: 'Switching config dir is unavailable' });
+      let body;
+      try { body = await readJson(req); } catch (err) { return json(res, 400, { error: err.message }); }
+      const raw = typeof body.path === 'string' ? body.path.trim() : '';
+      if (!raw) return json(res, 400, { error: 'Give a folder path' });
+      if (!(raw === '~' || raw.startsWith('~/') || path.isAbsolute(raw))) return json(res, 400, { error: 'Use an absolute path' });
+      try {
+        if (url.pathname.endsWith('/select')) await profiles.select(raw);
+        else if (url.pathname.endsWith('/remove')) profiles.remove(raw);
+        else profiles.add(raw);
+      } catch (err) {
+        return json(res, url.pathname.endsWith('/select') && profiles.fixed ? 409 : 400, { error: err.message });
+      }
+      return json(res, 200, profiles.list());
     }
 
     const decide = url.pathname.match(/^\/api\/runs\/([a-f0-9]+)\/(approvals\/([\w-]+)|close|mode)$/);

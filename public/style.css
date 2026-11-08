@@ -60,6 +60,11 @@ button { font: inherit; color: inherit; }
   padding: 5px 10px; border-radius: 6px; width: 200px;
 }
 .toggle { color: var(--muted); display: flex; gap: 4px; align-items: center; cursor: pointer; }
+.cfgdir { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.cfgdir:empty { display: none; }
+.cfgdir select { max-width: 240px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 4px 6px; font: inherit; }
+.cfgdir.busy { opacity: .6; cursor: progress; }
+@media (max-width: 720px) { .cfgdir-label { display: none; } .cfgdir select { max-width: 140px; } }
 .btn { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
 .btn:hover { border-color: var(--faint); }
 .btn.on { border-color: var(--accent); color: var(--accent); }
